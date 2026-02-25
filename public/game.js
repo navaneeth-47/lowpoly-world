@@ -1,5 +1,3 @@
-const socket = io();
-
 // Name entry
 const nameScreen = document.getElementById('name-screen');
 const nameInput = document.getElementById('name-input');
@@ -10,14 +8,17 @@ nameBtn.addEventListener('click', () => {
   const val = nameInput.value.trim();
   if (val) {
     myName = val;
-    socket.emit('setName', myName);
     nameScreen.style.display = 'none';
+    const socket = io();
+    initGame(socket);
   }
 });
 
 nameInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') nameBtn.click();
 });
+
+function initGame(socket) {
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -180,6 +181,7 @@ socket.on('init', (players) => {
       otherPlayers[id] = avatar;
     }
   }
+  socket.emit('setName', myName);
 });
 
 socket.on('playerJoined', (p) => {
@@ -228,7 +230,7 @@ socket.on('playerLeft', (id) => {
 });
 
 socket.on('chatMessage', (data) => {
-  const label = data.id === socket.id ? `You` : `${data.name || 'Player'}`;
+  const label = data.id === socket.id ? 'You' : `${data.name || 'Player'}`;
   showMessage(`${label}: ${data.msg}`);
 });
 
@@ -275,3 +277,5 @@ function animate() {
 }
 
 animate();
+
+} // end initGame
