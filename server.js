@@ -18,7 +18,8 @@ io.on('connection', (socket) => {
     x: Math.random() * 80 - 40,
     z: Math.random() * 80 - 40,
     color: Math.floor(Math.random() * 0xffffff),
-    name: 'Guest'
+    name: 'Guest',
+    avatarType: 'human'
   };
 
   socket.emit('init', players);
@@ -28,6 +29,12 @@ io.on('connection', (socket) => {
     if (players[socket.id]) {
       players[socket.id].name = name.slice(0, 16);
       io.emit('playerNamed', { id: socket.id, name: players[socket.id].name });
+    }
+  });
+
+  socket.on('setAvatarType', (type) => {
+    if (players[socket.id]) {
+      players[socket.id].avatarType = type;
     }
   });
 
@@ -42,15 +49,12 @@ io.on('connection', (socket) => {
   socket.on('chatMessage', (msg) => {
     const sender = players[socket.id];
     if (!sender) return;
-
-    // Only send to nearby players
     const PROXIMITY = 15;
     for (const id in players) {
       const other = players[id];
       const dx = sender.x - other.x;
       const dz = sender.z - other.z;
-      const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist <= PROXIMITY) {
+      if (Math.sqrt(dx * dx + dz * dz) <= PROXIMITY) {
         io.to(id).emit('chatMessage', { id: socket.id, name: sender.name, msg });
       }
     }

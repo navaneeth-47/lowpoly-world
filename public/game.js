@@ -1,23 +1,124 @@
-// Name entry
-const nameScreen = document.getElementById('name-screen');
-const nameInput = document.getElementById('name-input');
-const nameBtn = document.getElementById('name-btn');
+// ─── AVATAR DEFINITIONS ───────────────────────────────────────────────
+const AVATAR_TYPES = [
+  { id: 'cute',   label: 'Cute' },
+  { id: 'knight', label: 'Knight' },
+  { id: 'ghost',  label: 'Ghost' },
+  { id: 'human',  label: 'Human' },
+];
+
+// Draw a tiny 2D preview of each avatar type onto a canvas
+function drawAvatarPreview(type, color) {
+  const c = document.createElement('canvas');
+  c.width = 60; c.height = 80;
+  const ctx = c.getContext('2d');
+  const hex = '#' + color.toString(16).padStart(6, '0');
+
+  ctx.fillStyle = hex;
+
+  if (type === 'cute') {
+    // Big round head
+    ctx.beginPath(); ctx.arc(30, 28, 20, 0, Math.PI * 2); ctx.fill();
+    // Small body
+    ctx.beginPath(); ctx.ellipse(30, 60, 12, 16, 0, 0, Math.PI * 2); ctx.fill();
+    // Eyes
+    ctx.fillStyle = 'white';
+    ctx.beginPath(); ctx.arc(23, 25, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(37, 25, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(24, 25, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(38, 25, 2, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'knight') {
+    // Body
+    ctx.fillRect(18, 40, 24, 28);
+    // Helmet
+    ctx.beginPath(); ctx.arc(30, 25, 16, Math.PI, 0); ctx.fill();
+    ctx.fillRect(14, 25, 32, 18);
+    // Visor
+    ctx.fillStyle = '#222';
+    ctx.fillRect(20, 28, 20, 7);
+    // Sword
+    ctx.fillStyle = '#aaa';
+    ctx.fillRect(48, 20, 4, 40);
+    ctx.fillStyle = hex;
+    ctx.fillRect(44, 35, 12, 5);
+  } else if (type === 'ghost') {
+    // Glowy ghost body
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.arc(30, 30, 20, Math.PI, 0);
+    ctx.lineTo(50, 70);
+    ctx.bezierCurveTo(44, 62, 36, 68, 30, 62);
+    ctx.bezierCurveTo(24, 68, 16, 62, 10, 70);
+    ctx.lineTo(10, 30);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // Eyes
+    ctx.fillStyle = 'white';
+    ctx.beginPath(); ctx.arc(23, 28, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(37, 28, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(24, 29, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(38, 29, 2.5, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'human') {
+    // Head
+    ctx.beginPath(); ctx.arc(30, 18, 13, 0, Math.PI * 2); ctx.fill();
+    // Body
+    ctx.fillRect(20, 32, 20, 24);
+    // Legs
+    ctx.fillRect(20, 56, 8, 18);
+    ctx.fillRect(32, 56, 8, 18);
+    // Arms
+    ctx.fillRect(10, 33, 9, 18);
+    ctx.fillRect(41, 33, 9, 18);
+  }
+  return c;
+}
+
+// Build avatar picker UI
+let selectedAvatar = 'cute';
+const pickerEl = document.getElementById('avatar-picker');
+
+function buildPicker(color) {
+  pickerEl.innerHTML = '';
+  AVATAR_TYPES.forEach(av => {
+    const div = document.createElement('div');
+    div.className = 'avatar-option' + (av.id === selectedAvatar ? ' selected' : '');
+    div.dataset.id = av.id;
+    const preview = drawAvatarPreview(av.id, color);
+    const label = document.createElement('span');
+    label.textContent = av.label;
+    div.appendChild(preview);
+    div.appendChild(label);
+    div.addEventListener('click', () => {
+      selectedAvatar = av.id;
+      document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
+      div.classList.add('selected');
+    });
+    pickerEl.appendChild(div);
+  });
+}
+
+const previewColor = Math.floor(Math.random() * 0xffffff);
+buildPicker(previewColor);
+
+// ─── ENTRY ────────────────────────────────────────────────────────────
+const entryScreen = document.getElementById('entry-screen');
+const nameInput   = document.getElementById('name-input');
+const joinBtn     = document.getElementById('join-btn');
 let myName = 'Guest';
 
-nameBtn.addEventListener('click', () => {
+joinBtn.addEventListener('click', () => {
   const val = nameInput.value.trim();
-  if (val) {
-    myName = val;
-    nameScreen.style.display = 'none';
-    const socket = io();
-    initGame(socket);
-  }
+  if (!val) { nameInput.placeholder = 'Please enter a name!'; return; }
+  myName = val;
+  entryScreen.style.display = 'none';
+  const socket = io();
+  initGame(socket);
 });
 
-nameInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') nameBtn.click();
-});
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') joinBtn.click(); });
 
+// ─── GAME ─────────────────────────────────────────────────────────────
 function initGame(socket) {
 
 const scene = new THREE.Scene();
@@ -30,19 +131,15 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
-// Bright daylight
 const sun = new THREE.DirectionalLight(0xffffff, 1.2);
 sun.position.set(40, 80, 40);
 scene.add(sun);
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-// --- TERRAIN with smooth hills ---
-const TERRAIN_SIZE = 300;
-const TERRAIN_SEGS = 80;
-const terrainGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
-terrainGeo.rotateX(-Math.PI / 2);
+// ─── TERRAIN ──────────────────────────────────────────────────────────
+const TILE_SIZE = 100;
+const TILE_SEGS = 40;
 
-// Simple noise function
 function smoothNoise(x, z) {
   return (
     Math.sin(x * 0.03) * Math.cos(z * 0.03) * 4 +
@@ -52,145 +149,152 @@ function smoothNoise(x, z) {
   );
 }
 
-const terrainPositions = terrainGeo.attributes.position;
-const terrainHeights = [];
-for (let i = 0; i < terrainPositions.count; i++) {
-  const x = terrainPositions.getX(i);
-  const z = terrainPositions.getZ(i);
-  const h = smoothNoise(x, z);
-  terrainPositions.setY(i, h);
-  terrainHeights.push({ x, z, h });
-}
-terrainGeo.computeVertexNormals();
-
-// Color terrain by height - low=green, high=brown like reference
-const terrainColors = [];
-for (let i = 0; i < terrainPositions.count; i++) {
-  const h = terrainPositions.getY(i);
-  if (h < 1) {
-    terrainColors.push(0.53, 0.73, 0.13); // bright yellow-green
-  } else if (h < 2.5) {
-    terrainColors.push(0.47, 0.65, 0.10); // medium green
-  } else {
-    terrainColors.push(0.48, 0.25, 0.06); // brown hilltop
-  }
-}
-terrainGeo.setAttribute('color', new THREE.Float32BufferAttribute(terrainColors, 3));
-const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-const terrain = new THREE.Mesh(terrainGeo, terrainMat);
-scene.add(terrain);
-
-// Function to get terrain height at any x,z position
 function getTerrainHeight(x, z) {
   return smoothNoise(x, z);
 }
 
-// --- GRASS PATCHES ---
-function makeGrass(x, z) {
-  const grassColors = [0x44aa22, 0x55bb33, 0x33991a, 0x66cc44, 0x3d8c1a];
-  const count = 3 + Math.floor(Math.random() * 3);
-  const baseH = getTerrainHeight(x, z);
-  for (let i = 0; i < count; i++) {
-    const color = grassColors[Math.floor(Math.random() * grassColors.length)];
+function buildTile(tileX, tileZ) {
+  const geo = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE, TILE_SEGS, TILE_SEGS);
+  geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  const colors = [];
+  for (let i = 0; i < pos.count; i++) {
+    const wx = pos.getX(i) + tileX * TILE_SIZE;
+    const wz = pos.getZ(i) + tileZ * TILE_SIZE;
+    const h = smoothNoise(wx, wz);
+    pos.setY(i, h);
+    if (h < 1)        colors.push(0.53, 0.73, 0.13);
+    else if (h < 2.5) colors.push(0.47, 0.65, 0.10);
+    else              colors.push(0.48, 0.25, 0.06);
+  }
+  geo.computeVertexNormals();
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  mesh.position.set(tileX * TILE_SIZE, 0, tileZ * TILE_SIZE);
+  return mesh;
+}
+
+// Keep a 3x3 grid of tiles around the player
+const tiles = {};
+const tileObjects = {};
+
+function tileKey(tx, tz) { return `${tx}_${tz}`; }
+
+function updateTiles(playerX, playerZ) {
+  const cx = Math.round(playerX / TILE_SIZE);
+  const cz = Math.round(playerZ / TILE_SIZE);
+
+  // Add new tiles
+  for (let tx = cx - 1; tx <= cx + 1; tx++) {
+    for (let tz = cz - 1; tz <= cz + 1; tz++) {
+      const key = tileKey(tx, tz);
+      if (!tiles[key]) {
+        const mesh = buildTile(tx, tz);
+        scene.add(mesh);
+        tiles[key] = true;
+        tileObjects[key] = mesh;
+        spawnTileDecor(tx, tz);
+      }
+    }
+  }
+
+  // Remove far tiles
+  for (const key in tiles) {
+    const [ktx, ktz] = key.split('_').map(Number);
+    if (Math.abs(ktx - cx) > 2 || Math.abs(ktz - cz) > 2) {
+      scene.remove(tileObjects[key]);
+      delete tiles[key];
+      delete tileObjects[key];
+    }
+  }
+}
+
+// ─── DECOR PER TILE ────────────────────────────────────────────────────
+const tileDecor = {};
+
+function spawnTileDecor(tileX, tileZ) {
+  const key = tileKey(tileX, tileZ);
+  if (tileDecor[key]) return;
+  const group = new THREE.Group();
+  const ox = tileX * TILE_SIZE;
+  const oz = tileZ * TILE_SIZE;
+
+  // Trees
+  for (let i = 0; i < 20; i++) {
+    const x = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
+    const z = oz + Math.random() * TILE_SIZE - TILE_SIZE / 2;
+    const scale = 0.8 + Math.random() * 0.9;
+    const baseH = getTerrainHeight(x, z);
+    const trunkH = 1.2 * scale;
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12 * scale, 0.18 * scale, trunkH, 5),
+      new THREE.MeshLambertMaterial({ color: 0x3a1f00 })
+    );
+    trunk.position.set(x, baseH + trunkH / 2, z);
+    group.add(trunk);
+    const layerColors = [0x2d7a1a, 0x33881f, 0x226614];
+    [
+      { r: 1.4 * scale, h: 2.2 * scale, y: baseH + trunkH + 0.6 * scale },
+      { r: 1.0 * scale, h: 1.8 * scale, y: baseH + trunkH + 1.7 * scale },
+      { r: 0.6 * scale, h: 1.4 * scale, y: baseH + trunkH + 2.6 * scale },
+    ].forEach((l, i) => {
+      const cone = new THREE.Mesh(
+        new THREE.ConeGeometry(l.r, l.h, 7),
+        new THREE.MeshLambertMaterial({ color: layerColors[i] })
+      );
+      cone.position.set(x, l.y, z);
+      group.add(cone);
+    });
+  }
+
+  // Rocks
+  for (let i = 0; i < 6; i++) {
+    const cx = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
+    const cz = oz + Math.random() * TILE_SIZE - TILE_SIZE / 2;
+    const baseH = getTerrainHeight(cx, cz);
+    const count = 2 + Math.floor(Math.random() * 3);
+    for (let j = 0; j < count; j++) {
+      const size = 0.4 + Math.random() * 0.9;
+      const rock = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(size, 0),
+        new THREE.MeshLambertMaterial({ color: [0x999999, 0x888888, 0xaaaaaa][j % 3] })
+      );
+      rock.position.set(
+        cx + (Math.random() - 0.5) * 3,
+        baseH + size * 0.5,
+        cz + (Math.random() - 0.5) * 3
+      );
+      rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+      group.add(rock);
+    }
+  }
+
+  // Grass
+  for (let i = 0; i < 120; i++) {
+    const x = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
+    const z = oz + Math.random() * TILE_SIZE - TILE_SIZE / 2;
+    const baseH = getTerrainHeight(x, z);
     const height = 0.3 + Math.random() * 0.4;
     const blade = new THREE.Mesh(
       new THREE.ConeGeometry(0.05, height, 3),
-      new THREE.MeshLambertMaterial({ color })
+      new THREE.MeshLambertMaterial({ color: [0x44aa22, 0x55bb33, 0x33991a][Math.floor(Math.random() * 3)] })
     );
-    blade.position.set(
-      x + (Math.random() - 0.5) * 0.8,
-      baseH + height / 2,
-      z + (Math.random() - 0.5) * 0.8
-    );
+    blade.position.set(x, baseH + height / 2, z);
     blade.rotation.z = (Math.random() - 0.5) * 0.3;
-    scene.add(blade);
+    group.add(blade);
   }
+
+  scene.add(group);
+  tileDecor[key] = group;
 }
 
-for (let i = 0; i < 500; i++) {
-  const x = Math.random() * 140 - 70;
-  const z = Math.random() * 140 - 70;
-  makeGrass(x, z);
-}
-
-// --- PINE TREES ---
-function makePineTree(x, z) {
-  const scale = 0.8 + Math.random() * 0.9;
-  const trunkH = 1.2 * scale;
-  const baseH = getTerrainHeight(x, z);
-
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.12 * scale, 0.18 * scale, trunkH, 5),
-    new THREE.MeshLambertMaterial({ color: 0x3a1f00 })
-  );
-  trunk.position.set(x, baseH + trunkH / 2, z);
-  scene.add(trunk);
-
-  const layerColors = [0x2d7a1a, 0x33881f, 0x226614];
-  const layers = [
-    { r: 1.4 * scale, h: 2.2 * scale, y: baseH + trunkH + 0.6 * scale },
-    { r: 1.0 * scale, h: 1.8 * scale, y: baseH + trunkH + 1.7 * scale },
-    { r: 0.6 * scale, h: 1.4 * scale, y: baseH + trunkH + 2.6 * scale },
-  ];
-
-  layers.forEach((l, i) => {
-    const cone = new THREE.Mesh(
-      new THREE.ConeGeometry(l.r, l.h, 7),
-      new THREE.MeshLambertMaterial({ color: layerColors[i] })
-    );
-    cone.position.set(x, l.y, z);
-    scene.add(cone);
-  });
-}
-
-for (let i = 0; i < 120; i++) {
-  makePineTree(
-    Math.random() * 220 - 110,
-    Math.random() * 220 - 110
-  );
-}
-
-// --- ROCK CLUSTERS ---
-function makeRockCluster(cx, cz) {
-  const rockCount = 2 + Math.floor(Math.random() * 4);
-  const rockColors = [0x999999, 0x888888, 0xaaaaaa, 0x777777];
-  const baseH = getTerrainHeight(cx, cz);
-  for (let i = 0; i < rockCount; i++) {
-    const size = 0.4 + Math.random() * 1.0;
-    const rock = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(size, 0),
-      new THREE.MeshLambertMaterial({ color: rockColors[Math.floor(Math.random() * rockColors.length)] })
-    );
-    rock.position.set(
-      cx + (Math.random() - 0.5) * 3,
-      baseH + size * 0.5,
-      cz + (Math.random() - 0.5) * 3
-    );
-    rock.rotation.set(
-      Math.random() * Math.PI,
-      Math.random() * Math.PI,
-      Math.random() * Math.PI
-    );
-    scene.add(rock);
-  }
-}
-
-for (let i = 0; i < 30; i++) {
-  makeRockCluster(
-    Math.random() * 180 - 90,
-    Math.random() * 180 - 90
-  );
-}
-
-// --- NAME TAG ---
+// ─── AVATAR BUILDER ────────────────────────────────────────────────────
 function makeNameTag(name) {
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 64;
+  canvas.width = 256; canvas.height = 64;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.roundRect(0, 0, 256, 64, 12);
-  ctx.fill();
+  ctx.roundRect(0, 0, 256, 64, 12); ctx.fill();
   ctx.fillStyle = 'white';
   ctx.font = 'bold 28px sans-serif';
   ctx.textAlign = 'center';
@@ -198,48 +302,128 @@ function makeNameTag(name) {
   return new THREE.CanvasTexture(canvas);
 }
 
-// --- AVATAR ---
-function makeAvatar(color, name) {
+function makeAvatar(color, name, type) {
   const group = new THREE.Group();
+  const mat = new THREE.MeshLambertMaterial({ color });
+  const darkMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+  const greyMat = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
 
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.4, 0.4, 1.2, 6),
-    new THREE.MeshLambertMaterial({ color })
-  );
-  body.position.y = 0.8;
+  if (type === 'cute') {
+    // Big round head
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 8), mat);
+    head.position.y = 1.6;
+    // Small chubby body
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 7, 7), mat);
+    body.scale.y = 1.2;
+    body.position.y = 0.75;
+    // Eyes
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 5), darkMat);
+    eyeL.position.set(-0.2, 1.68, 0.48);
+    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 5), darkMat);
+    eyeR.position.set(0.2, 1.68, 0.48);
+    // Tiny legs
+    const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.5, 5), mat);
+    legL.position.set(-0.18, 0.25, 0);
+    const legR = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.5, 5), mat);
+    legR.position.set(0.18, 0.25, 0);
+    group.add(head, body, eyeL, eyeR, legL, legR);
 
-  const head = new THREE.Mesh(
-    new THREE.DodecahedronGeometry(0.4, 0),
-    new THREE.MeshLambertMaterial({ color })
-  );
-  head.position.y = 1.8;
+  } else if (type === 'knight') {
+    // Body armor
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.5), mat);
+    body.position.y = 0.9;
+    // Helmet
+    const helmet = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.5, 6), mat);
+    helmet.position.y = 1.75;
+    const helmetTop = new THREE.Mesh(new THREE.SphereGeometry(0.38, 6, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+    helmetTop.position.y = 2.0;
+    // Visor
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, 0.1), darkMat);
+    visor.position.set(0, 1.78, 0.4);
+    // Legs
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.6, 0.28), mat);
+    legL.position.set(-0.2, 0.3, 0);
+    const legR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.6, 0.28), mat);
+    legR.position.set(0.2, 0.3, 0);
+    // Sword
+    const sword = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 0.06), greyMat);
+    sword.position.set(0.6, 1.1, 0);
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.06), greyMat);
+    guard.position.set(0.6, 0.65, 0);
+    group.add(body, helmet, helmetTop, visor, legL, legR, sword, guard);
 
+  } else if (type === 'ghost') {
+    const glowMat = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.85 });
+    // Main body
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8, 0, Math.PI * 2, 0, Math.PI * 0.65), glowMat);
+    body.position.y = 1.3;
+    // Flowing bottom
+    const bottom = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.8, 8), glowMat);
+    bottom.position.y = 0.85;
+    // Eyes
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 5),
+      new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1 }));
+    eyeL.position.set(-0.18, 1.45, 0.44);
+    const eyeR = eyeL.clone();
+    eyeR.position.set(0.18, 1.45, 0.44);
+    // Glow halo
+    const halo = new THREE.Mesh(
+      new THREE.TorusGeometry(0.55, 0.06, 6, 12),
+      new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.8 })
+    );
+    halo.position.y = 2.0;
+    halo.rotation.x = Math.PI / 2;
+    group.add(body, bottom, eyeL, eyeR, halo);
+
+  } else if (type === 'human') {
+    // Head
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), mat);
+    head.position.y = 1.75;
+    // Body
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.35), mat);
+    body.position.y = 1.05;
+    // Arms
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 0.2), mat);
+    armL.position.set(-0.42, 1.05, 0);
+    const armR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 0.2), mat);
+    armR.position.set(0.42, 1.05, 0);
+    // Legs
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.7, 0.24), mat);
+    legL.position.set(-0.18, 0.35, 0);
+    const legR = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.7, 0.24), mat);
+    legR.position.set(0.18, 0.35, 0);
+    // Eyes
+    const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.05), darkMat);
+    eyeL.position.set(-0.12, 1.8, 0.26);
+    const eyeR = eyeL.clone();
+    eyeR.position.set(0.12, 1.8, 0.26);
+    group.add(head, body, armL, armR, legL, legR, eyeL, eyeR);
+  }
+
+  // Name tag
   const tagMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(2, 0.5),
     new THREE.MeshBasicMaterial({ map: makeNameTag(name), transparent: true, depthWrite: false })
   );
-  tagMesh.position.y = 2.6;
+  tagMesh.position.y = 2.9;
   tagMesh.name = 'nameTag';
 
+  // Speech bubble
   const bubbleCanvas = document.createElement('canvas');
-  bubbleCanvas.width = 512;
-  bubbleCanvas.height = 128;
+  bubbleCanvas.width = 512; bubbleCanvas.height = 128;
   const bubbleTexture = new THREE.CanvasTexture(bubbleCanvas);
   const bubble = new THREE.Mesh(
     new THREE.PlaneGeometry(4, 1),
     new THREE.MeshBasicMaterial({ map: bubbleTexture, transparent: true, depthWrite: false })
   );
-  bubble.position.y = 3.4;
+  bubble.position.y = 3.7;
   bubble.name = 'speechBubble';
   bubble.visible = false;
   bubble.userData.canvas = bubbleCanvas;
   bubble.userData.texture = bubbleTexture;
   bubble.userData.timeout = null;
 
-  group.add(body);
-  group.add(head);
-  group.add(tagMesh);
-  group.add(bubble);
+  group.add(tagMesh, bubble);
   return group;
 }
 
@@ -250,8 +434,7 @@ function showSpeechBubble(avatar, text) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = 'white';
-  ctx.roundRect(10, 10, canvas.width - 20, canvas.height - 30, 16);
-  ctx.fill();
+  ctx.roundRect(10, 10, canvas.width - 20, canvas.height - 30, 16); ctx.fill();
   ctx.beginPath();
   ctx.moveTo(canvas.width / 2 - 10, canvas.height - 20);
   ctx.lineTo(canvas.width / 2, canvas.height);
@@ -267,20 +450,20 @@ function showSpeechBubble(avatar, text) {
   bubble.userData.timeout = setTimeout(() => { bubble.visible = false; }, 5000);
 }
 
+// ─── STATE ─────────────────────────────────────────────────────────────
 let myPlayer = null;
-let myColor = null;
+let myColor  = null;
 const otherPlayers = {};
 const PROXIMITY = 15;
 
 const keys = {};
 window.addEventListener('keydown', e => keys[e.key] = true);
-window.addEventListener('keyup', e => keys[e.key] = false);
+window.addEventListener('keyup',   e => keys[e.key] = false);
 
 const messagesDiv = document.getElementById('messages');
-const chatBox = document.getElementById('chat-box');
-const chatInput = document.getElementById('chat-input');
-const chatSend = document.getElementById('chat-send');
-chatBox.style.display = 'none';
+const chatBox     = document.getElementById('chat-box');
+const chatInput   = document.getElementById('chat-input');
+const chatSend    = document.getElementById('chat-send');
 
 function showMessage(text) {
   const p = document.createElement('p');
@@ -291,41 +474,34 @@ function showMessage(text) {
 
 chatSend.addEventListener('click', () => {
   const msg = chatInput.value.trim();
-  if (msg) {
-    socket.emit('chatMessage', msg);
-    chatInput.value = '';
-  }
+  if (msg) { socket.emit('chatMessage', msg); chatInput.value = ''; }
 });
-
-chatInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') chatSend.click();
-});
+chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') chatSend.click(); });
 
 function checkProximity() {
   if (!myPlayer) return;
-  let someoneNearby = false;
+  let near = false;
   for (const id in otherPlayers) {
     const dx = myPlayer.position.x - otherPlayers[id].position.x;
     const dz = myPlayer.position.z - otherPlayers[id].position.z;
-    if (Math.sqrt(dx * dx + dz * dz) <= PROXIMITY) {
-      someoneNearby = true;
-      break;
-    }
+    if (Math.sqrt(dx * dx + dz * dz) <= PROXIMITY) { near = true; break; }
   }
-  chatBox.style.display = someoneNearby ? 'flex' : 'none';
+  chatBox.style.display = near ? 'flex' : 'none';
 }
 
+// ─── SOCKET EVENTS ─────────────────────────────────────────────────────
 socket.on('init', (players) => {
   for (const id in players) {
     const p = players[id];
     if (id === socket.id) {
-      myColor = p.color;
-      myPlayer = makeAvatar(myColor, myName);
-      const h = getTerrainHeight(p.x, p.z);
+      myColor  = p.color;
+      myPlayer = makeAvatar(myColor, myName, selectedAvatar);
+      const h  = getTerrainHeight(p.x, p.z);
       myPlayer.position.set(p.x, h, p.z);
       scene.add(myPlayer);
+      updateTiles(p.x, p.z);
     } else {
-      const avatar = makeAvatar(p.color, p.name);
+      const avatar = makeAvatar(p.color, p.name, p.avatarType || 'human');
       const h = getTerrainHeight(p.x, p.z);
       avatar.position.set(p.x, h, p.z);
       scene.add(avatar);
@@ -333,10 +509,11 @@ socket.on('init', (players) => {
     }
   }
   socket.emit('setName', myName);
+  socket.emit('setAvatarType', selectedAvatar);
 });
 
 socket.on('playerJoined', (p) => {
-  const avatar = makeAvatar(p.color, p.name);
+  const avatar = makeAvatar(p.color, p.name, p.avatarType || 'human');
   const h = getTerrainHeight(p.x, p.z);
   avatar.position.set(p.x, h, p.z);
   scene.add(avatar);
@@ -347,10 +524,7 @@ socket.on('playerJoined', (p) => {
 socket.on('playerNamed', (data) => {
   if (otherPlayers[data.id]) {
     const tag = otherPlayers[data.id].getObjectByName('nameTag');
-    if (tag) {
-      tag.material.map = makeNameTag(data.name);
-      tag.material.map.needsUpdate = true;
-    }
+    if (tag) { tag.material.map = makeNameTag(data.name); tag.material.map.needsUpdate = true; }
   }
 });
 
@@ -363,10 +537,7 @@ socket.on('playerMoved', (data) => {
 });
 
 socket.on('playerLeft', (id) => {
-  if (otherPlayers[id]) {
-    scene.remove(otherPlayers[id]);
-    delete otherPlayers[id];
-  }
+  if (otherPlayers[id]) { scene.remove(otherPlayers[id]); delete otherPlayers[id]; }
   showMessage('A player left.');
   checkProximity();
 });
@@ -374,11 +545,8 @@ socket.on('playerLeft', (id) => {
 socket.on('chatMessage', (data) => {
   const label = data.id === socket.id ? 'You' : data.name || 'Player';
   showMessage(`${label}: ${data.msg}`);
-  if (data.id === socket.id && myPlayer) {
-    showSpeechBubble(myPlayer, data.msg);
-  } else if (otherPlayers[data.id]) {
-    showSpeechBubble(otherPlayers[data.id], data.msg);
-  }
+  if (data.id === socket.id && myPlayer) showSpeechBubble(myPlayer, data.msg);
+  else if (otherPlayers[data.id]) showSpeechBubble(otherPlayers[data.id], data.msg);
 });
 
 window.addEventListener('resize', () => {
@@ -387,6 +555,7 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// ─── GAME LOOP ──────────────────────────────────────────────────────────
 const speed = 0.12;
 
 function animate() {
@@ -394,18 +563,18 @@ function animate() {
 
   if (myPlayer) {
     let moved = false;
-    if (keys['ArrowUp'] || keys['w'] || keys['W']) { myPlayer.position.z -= speed; moved = true; }
-    if (keys['ArrowDown'] || keys['s'] || keys['S']) { myPlayer.position.z += speed; moved = true; }
-    if (keys['ArrowLeft'] || keys['a'] || keys['A']) { myPlayer.position.x -= speed; moved = true; }
+    if (keys['ArrowUp']    || keys['w'] || keys['W']) { myPlayer.position.z -= speed; moved = true; }
+    if (keys['ArrowDown']  || keys['s'] || keys['S']) { myPlayer.position.z += speed; moved = true; }
+    if (keys['ArrowLeft']  || keys['a'] || keys['A']) { myPlayer.position.x -= speed; moved = true; }
     if (keys['ArrowRight'] || keys['d'] || keys['D']) { myPlayer.position.x += speed; moved = true; }
 
-    // Snap player to terrain height smoothly
     const targetH = getTerrainHeight(myPlayer.position.x, myPlayer.position.z);
     myPlayer.position.y += (targetH - myPlayer.position.y) * 0.2;
 
     if (moved) {
       socket.emit('move', { x: myPlayer.position.x, z: myPlayer.position.z });
       checkProximity();
+      updateTiles(myPlayer.position.x, myPlayer.position.z);
     }
 
     camera.position.x = myPlayer.position.x;
@@ -415,9 +584,7 @@ function animate() {
   }
 
   scene.traverse((obj) => {
-    if (obj.name === 'nameTag' || obj.name === 'speechBubble') {
-      obj.lookAt(camera.position);
-    }
+    if (obj.name === 'nameTag' || obj.name === 'speechBubble') obj.lookAt(camera.position);
   });
 
   renderer.render(scene, camera);
@@ -425,4 +592,4 @@ function animate() {
 
 animate();
 
-} 
+} // end initGame
