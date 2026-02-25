@@ -21,8 +21,8 @@ nameInput.addEventListener('keydown', e => {
 function initGame(socket) {
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a0a2e);
-scene.fog = new THREE.Fog(0x1a0a2e, 30, 120);
+scene.background = new THREE.Color(0xd0d8e0);
+scene.fog = new THREE.Fog(0xd0d8e0, 60, 160);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -30,161 +30,160 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
-// Lighting - magical purple/blue tones
-const moonLight = new THREE.DirectionalLight(0x8888ff, 0.8);
-moonLight.position.set(20, 40, 20);
-scene.add(moonLight);
-scene.add(new THREE.AmbientLight(0x221144, 0.8));
+// Bright daylight
+const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+sun.position.set(40, 80, 40);
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-// Glowing point lights scattered around
-const glowColors = [0x00ffaa, 0xff44ff, 0x44ffff, 0xffaa00];
-for (let i = 0; i < 8; i++) {
-  const light = new THREE.PointLight(glowColors[i % glowColors.length], 1.5, 20);
-  light.position.set(
-    Math.random() * 120 - 60,
-    3,
-    Math.random() * 120 - 60
-  );
-  scene.add(light);
-}
-
-// Ground - dark mossy color with bumps
-const groundGeo = new THREE.PlaneGeometry(200, 200, 30, 30);
-const groundMat = new THREE.MeshLambertMaterial({ color: 0x1a3a1a });
-const pos = groundGeo.attributes.position;
-for (let i = 0; i < pos.count; i++) {
-  pos.setY(i, Math.random() * 1.2);
+// --- GROUND (bright yellow-green) ---
+const groundGeo = new THREE.PlaneGeometry(300, 300, 60, 60);
+const groundMat = new THREE.MeshLambertMaterial({ color: 0xaacc22 });
+const gpos = groundGeo.attributes.position;
+for (let i = 0; i < gpos.count; i++) {
+  gpos.setY(i, Math.random() * 0.8);
 }
 groundGeo.computeVertexNormals();
 const ground = new THREE.Mesh(groundGeo, groundMat);
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-// Glowing fantasy tree
-function makeGlowTree(x, z) {
-  const trunkColor = [0x4a2800, 0x3a1f00, 0x5c3317][Math.floor(Math.random() * 3)];
-  const leafColors = [0x00cc66, 0x9900ff, 0x0099ff, 0xff0099, 0x00ffcc];
-  const leafColor = leafColors[Math.floor(Math.random() * leafColors.length)];
+// --- CLIFFS ---
+// Cliffs are flat-topped brown walls dropped below ground level
+function makeCliff(x, z, width, depth, height, rotation) {
+  const cliffGeo = new THREE.BufferGeometry();
+
+  // A cliff face is just a flat quad going downward
+  const hw = width / 2;
+  const vertices = new Float32Array([
+    -hw, 0, 0,
+     hw, 0, 0,
+     hw, -height, depth,
+    -hw, -height, depth,
+  ]);
+  const indices = [0, 1, 2, 0, 2, 3];
+  cliffGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+  cliffGeo.setIndex(indices);
+  cliffGeo.computeVertexNormals();
+
+  const cliff = new THREE.Mesh(
+    cliffGeo,
+    new THREE.MeshLambertMaterial({ color: 0x7a4a1a, side: THREE.DoubleSide })
+  );
+  cliff.position.set(x, 0, z);
+  cliff.rotation.y = rotation;
+  scene.add(cliff);
+}
+
+// Place several cliff sections around the map
+makeCliff(-30, -20, 60, 8, 12, 0);
+makeCliff(20, 30, 50, 8, 10, Math.PI * 0.15);
+makeCliff(-50, 10, 40, 8, 14, Math.PI * 0.5);
+makeCliff(40, -30, 55, 8, 11, Math.PI * -0.2);
+makeCliff(-10, 50, 45, 8, 13, Math.PI * 0.3);
+makeCliff(60, 20, 35, 8, 10, Math.PI * 0.7);
+makeCliff(-60, -40, 50, 8, 12, Math.PI * -0.1);
+makeCliff(10, -60, 60, 8, 11, Math.PI * 0.1);
+
+// --- PINE TREES ---
+function makePineTree(x, z) {
+  const scale = 0.7 + Math.random() * 0.8;
+  const trunkH = 1.2 * scale;
 
   const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.15, 0.3, 2 + Math.random(), 6),
-    new THREE.MeshLambertMaterial({ color: trunkColor })
+    new THREE.CylinderGeometry(0.12 * scale, 0.18 * scale, trunkH, 5),
+    new THREE.MeshLambertMaterial({ color: 0x2a1a0a })
   );
-  trunk.position.set(x, 1, z);
+  trunk.position.set(x, trunkH / 2, z);
 
-  // Two layered cones for fuller look
-  const leaves1 = new THREE.Mesh(
-    new THREE.ConeGeometry(2, 3.5, 7),
-    new THREE.MeshLambertMaterial({ color: leafColor, emissive: leafColor, emissiveIntensity: 0.3 })
-  );
-  leaves1.position.set(x, 4.5, z);
+  // Three layered cones like the reference image
+  const layerColors = [0x2d6e1a, 0x347a1f, 0x255e15];
+  const layers = [
+    { r: 1.4 * scale, h: 2.2 * scale, y: trunkH + 0.8 * scale },
+    { r: 1.1 * scale, h: 1.8 * scale, y: trunkH + 1.8 * scale },
+    { r: 0.7 * scale, h: 1.4 * scale, y: trunkH + 2.6 * scale },
+  ];
 
-  const leaves2 = new THREE.Mesh(
-    new THREE.ConeGeometry(1.3, 2.5, 6),
-    new THREE.MeshLambertMaterial({ color: leafColor, emissive: leafColor, emissiveIntensity: 0.4 })
-  );
-  leaves2.position.set(x, 6.5, z);
+  layers.forEach((l, i) => {
+    const cone = new THREE.Mesh(
+      new THREE.ConeGeometry(l.r, l.h, 7),
+      new THREE.MeshLambertMaterial({ color: layerColors[i] })
+    );
+    cone.position.set(x, l.y, z);
+    scene.add(cone);
+  });
 
   scene.add(trunk);
-  scene.add(leaves1);
-  scene.add(leaves2);
 }
 
-for (let i = 0; i < 70; i++) {
-  makeGlowTree(Math.random() * 160 - 80, Math.random() * 160 - 80);
-}
-
-// Giant glowing mushrooms
-function makeMushroom(x, z) {
-  const stemColors = [0xffddcc, 0xeeddff, 0xddffee];
-  const capColors = [0xff2244, 0xff6600, 0xcc00ff, 0xff0088, 0x00ccff];
-  const capColor = capColors[Math.floor(Math.random() * capColors.length)];
-  const scale = 0.5 + Math.random() * 1.5;
-
-  const stem = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.2 * scale, 0.3 * scale, 1.5 * scale, 7),
-    new THREE.MeshLambertMaterial({ color: stemColors[Math.floor(Math.random() * stemColors.length)] })
+for (let i = 0; i < 120; i++) {
+  makePineTree(
+    Math.random() * 220 - 110,
+    Math.random() * 220 - 110
   );
-  stem.position.set(x, 0.75 * scale, z);
+}
 
-  const cap = new THREE.Mesh(
-    new THREE.SphereGeometry(0.9 * scale, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2),
-    new THREE.MeshLambertMaterial({ color: capColor, emissive: capColor, emissiveIntensity: 0.4 })
+// --- ROCK CLUSTERS ---
+function makeRockCluster(cx, cz) {
+  const rockCount = 2 + Math.floor(Math.random() * 4);
+  const rockColors = [0x888888, 0x777777, 0x999999, 0xaaaaaa, 0x666666];
+  for (let i = 0; i < rockCount; i++) {
+    const size = 0.4 + Math.random() * 1.2;
+    const color = rockColors[Math.floor(Math.random() * rockColors.length)];
+    const rock = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(size, 0),
+      new THREE.MeshLambertMaterial({ color })
+    );
+    rock.position.set(
+      cx + (Math.random() - 0.5) * 3,
+      size * 0.4,
+      cz + (Math.random() - 0.5) * 3
+    );
+    rock.rotation.set(
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+      Math.random() * Math.PI
+    );
+    scene.add(rock);
+  }
+}
+
+for (let i = 0; i < 35; i++) {
+  makeRockCluster(
+    Math.random() * 200 - 100,
+    Math.random() * 200 - 100
   );
-  cap.position.set(x, 1.6 * scale, z);
-
-  scene.add(stem);
-  scene.add(cap);
 }
 
-for (let i = 0; i < 50; i++) {
-  makeMushroom(Math.random() * 160 - 80, Math.random() * 160 - 80);
-}
-
-// Glowing crystals
-function makeCrystal(x, z) {
-  const crystalColors = [0x00ffff, 0xff00ff, 0xffff00, 0x00ff88];
-  const color = crystalColors[Math.floor(Math.random() * crystalColors.length)];
-  const height = 0.5 + Math.random() * 2;
-
-  const crystal = new THREE.Mesh(
-    new THREE.ConeGeometry(0.2, height, 4),
-    new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.6 })
-  );
-  crystal.position.set(x, height / 2, z);
-  crystal.rotation.y = Math.random() * Math.PI;
-  scene.add(crystal);
-}
-
-for (let i = 0; i < 40; i++) {
-  makeCrystal(Math.random() * 160 - 80, Math.random() * 160 - 80);
-}
-
-// Firefly particles
-const fireflyCount = 200;
-const fireflyGeo = new THREE.BufferGeometry();
-const fireflyPos = new Float32Array(fireflyCount * 3);
-const fireflyPhase = [];
-for (let i = 0; i < fireflyCount; i++) {
-  fireflyPos[i * 3] = Math.random() * 160 - 80;
-  fireflyPos[i * 3 + 1] = 1 + Math.random() * 5;
-  fireflyPos[i * 3 + 2] = Math.random() * 160 - 80;
-  fireflyPhase.push(Math.random() * Math.PI * 2);
-}
-fireflyGeo.setAttribute('position', new THREE.BufferAttribute(fireflyPos, 3));
-const fireflyMat = new THREE.PointsMaterial({ color: 0xaaffaa, size: 0.15, transparent: true, opacity: 0.9 });
-const fireflies = new THREE.Points(fireflyGeo, fireflyMat);
-scene.add(fireflies);
-
-// Name tag helper
+// --- NAME TAG ---
 function makeNameTag(name) {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 64;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'rgba(20,0,40,0.7)';
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.roundRect(0, 0, 256, 64, 12);
   ctx.fill();
-  ctx.fillStyle = '#ccaaff';
+  ctx.fillStyle = 'white';
   ctx.font = 'bold 28px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(name || 'Guest', 128, 42);
   return new THREE.CanvasTexture(canvas);
 }
 
-// Avatar
+// --- AVATAR ---
 function makeAvatar(color, name) {
   const group = new THREE.Group();
 
   const body = new THREE.Mesh(
     new THREE.CylinderGeometry(0.4, 0.4, 1.2, 6),
-    new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.2 })
+    new THREE.MeshLambertMaterial({ color })
   );
   body.position.y = 0.8;
 
   const head = new THREE.Mesh(
     new THREE.DodecahedronGeometry(0.4, 0),
-    new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.2 })
+    new THREE.MeshLambertMaterial({ color })
   );
   head.position.y = 1.8;
 
@@ -312,7 +311,7 @@ socket.on('playerJoined', (p) => {
   avatar.position.set(p.x, 0, p.z);
   scene.add(avatar);
   otherPlayers[p.id] = avatar;
-  showMessage(`✨ ${p.name} entered the forest!`);
+  showMessage(`${p.name} joined the world!`);
 });
 
 socket.on('playerNamed', (data) => {
@@ -338,7 +337,7 @@ socket.on('playerLeft', (id) => {
     scene.remove(otherPlayers[id]);
     delete otherPlayers[id];
   }
-  showMessage('A traveller left the forest.');
+  showMessage('A player left.');
   checkProximity();
 });
 
@@ -359,21 +358,9 @@ window.addEventListener('resize', () => {
 });
 
 const speed = 0.1;
-let time = 0;
 
 function animate() {
   requestAnimationFrame(animate);
-  time += 0.01;
-
-  // Animate fireflies
-  const positions = fireflies.geometry.attributes.position.array;
-  for (let i = 0; i < fireflyCount; i++) {
-    positions[i * 3 + 1] = 1 + Math.sin(time + fireflyPhase[i]) * 2;
-    positions[i * 3] += Math.sin(time * 0.5 + fireflyPhase[i]) * 0.02;
-    positions[i * 3 + 2] += Math.cos(time * 0.5 + fireflyPhase[i]) * 0.02;
-  }
-  fireflies.geometry.attributes.position.needsUpdate = true;
-  fireflyMat.opacity = 0.5 + Math.sin(time * 2) * 0.4;
 
   if (myPlayer) {
     let moved = false;
