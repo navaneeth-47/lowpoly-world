@@ -21,8 +21,8 @@ nameInput.addEventListener('keydown', e => {
 function initGame(socket) {
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xd0d8e0);
-scene.fog = new THREE.Fog(0xd0d8e0, 60, 160);
+scene.background = new THREE.Color(0xd0e8f0);
+scene.fog = new THREE.Fog(0xd0e8f0, 60, 160);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -36,72 +36,87 @@ sun.position.set(40, 80, 40);
 scene.add(sun);
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-// --- GROUND (bright yellow-green) ---
-const groundGeo = new THREE.PlaneGeometry(300, 300, 60, 60);
-const groundMat = new THREE.MeshLambertMaterial({ color: 0xaacc22 });
-const gpos = groundGeo.attributes.position;
-for (let i = 0; i < gpos.count; i++) {
-  gpos.setY(i, Math.random() * 0.8);
-}
-groundGeo.computeVertexNormals();
+// --- FLAT GREEN GROUND ---
+const groundGeo = new THREE.PlaneGeometry(300, 300);
+const groundMat = new THREE.MeshLambertMaterial({ color: 0x88bb22 });
 const ground = new THREE.Mesh(groundGeo, groundMat);
 ground.rotation.x = -Math.PI / 2;
+ground.position.y = 0;
 scene.add(ground);
 
-// --- CLIFFS ---
-// Cliffs are flat-topped brown walls dropped below ground level
-function makeCliff(x, z, width, depth, height, rotation) {
-  const cliffGeo = new THREE.BufferGeometry();
-
-  // A cliff face is just a flat quad going downward
-  const hw = width / 2;
-  const vertices = new Float32Array([
-    -hw, 0, 0,
-     hw, 0, 0,
-     hw, -height, depth,
-    -hw, -height, depth,
-  ]);
-  const indices = [0, 1, 2, 0, 2, 3];
-  cliffGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-  cliffGeo.setIndex(indices);
-  cliffGeo.computeVertexNormals();
-
-  const cliff = new THREE.Mesh(
-    cliffGeo,
-    new THREE.MeshLambertMaterial({ color: 0x7a4a1a, side: THREE.DoubleSide })
+// --- RAISED TERRAIN PLATEAUS (cliffs from reference) ---
+// These are flat boxes sitting ON the ground with brown sides visible
+function makePlateau(x, z, w, d, h) {
+  // Top surface - green
+  const top = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    [
+      new THREE.MeshLambertMaterial({ color: 0x7a4010 }), // right side brown
+      new THREE.MeshLambertMaterial({ color: 0x7a4010 }), // left side brown
+      new THREE.MeshLambertMaterial({ color: 0x99cc22 }), // top green
+      new THREE.MeshLambertMaterial({ color: 0x5a3008 }), // bottom
+      new THREE.MeshLambertMaterial({ color: 0x7a4010 }), // front brown
+      new THREE.MeshLambertMaterial({ color: 0x7a4010 }), // back brown
+    ]
   );
-  cliff.position.set(x, 0, z);
-  cliff.rotation.y = rotation;
-  scene.add(cliff);
+  top.position.set(x, h / 2, z);
+  scene.add(top);
 }
 
-// Place several cliff sections around the map
-makeCliff(-30, -20, 60, 8, 12, 0);
-makeCliff(20, 30, 50, 8, 10, Math.PI * 0.15);
-makeCliff(-50, 10, 40, 8, 14, Math.PI * 0.5);
-makeCliff(40, -30, 55, 8, 11, Math.PI * -0.2);
-makeCliff(-10, 50, 45, 8, 13, Math.PI * 0.3);
-makeCliff(60, 20, 35, 8, 10, Math.PI * 0.7);
-makeCliff(-60, -40, 50, 8, 12, Math.PI * -0.1);
-makeCliff(10, -60, 60, 8, 11, Math.PI * 0.1);
+// Place plateaus around edges to create cliff walls like the reference
+makePlateau(-80, 0, 40, 300, 8);   // left wall
+makePlateau(80, 0, 40, 300, 8);    // right wall
+makePlateau(0, -80, 300, 40, 8);   // back wall
+makePlateau(0, 80, 300, 40, 8);    // front wall
+makePlateau(-50, -40, 30, 80, 6);  // inner cliff left
+makePlateau(45, 30, 25, 70, 5);    // inner cliff right
+makePlateau(-20, 50, 60, 25, 7);   // inner cliff top
+
+// --- GRASS PATCHES ---
+function makeGrass(x, z) {
+  const grassColors = [0x44aa22, 0x55bb33, 0x33991a, 0x66cc44, 0x3d8c1a];
+  const count = 4 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < count; i++) {
+    const color = grassColors[Math.floor(Math.random() * grassColors.length)];
+    const height = 0.3 + Math.random() * 0.5;
+    const blade = new THREE.Mesh(
+      new THREE.ConeGeometry(0.05, height, 3),
+      new THREE.MeshLambertMaterial({ color })
+    );
+    blade.position.set(
+      x + (Math.random() - 0.5) * 0.8,
+      height / 2,
+      z + (Math.random() - 0.5) * 0.8
+    );
+    blade.rotation.z = (Math.random() - 0.5) * 0.3;
+    scene.add(blade);
+  }
+}
+
+for (let i = 0; i < 500; i++) {
+  makeGrass(
+    Math.random() * 140 - 70,
+    Math.random() * 140 - 70
+  );
+}
 
 // --- PINE TREES ---
 function makePineTree(x, z) {
-  const scale = 0.7 + Math.random() * 0.8;
+  const scale = 0.8 + Math.random() * 0.9;
   const trunkH = 1.2 * scale;
 
   const trunk = new THREE.Mesh(
     new THREE.CylinderGeometry(0.12 * scale, 0.18 * scale, trunkH, 5),
-    new THREE.MeshLambertMaterial({ color: 0x2a1a0a })
+    new THREE.MeshLambertMaterial({ color: 0x3a1f00 })
   );
   trunk.position.set(x, trunkH / 2, z);
+  scene.add(trunk);
 
-  // Three layered cones like the reference image
-  const layerColors = [0x2d6e1a, 0x347a1f, 0x255e15];
+  const layerColors = [0x2d7a1a, 0x33881f, 0x226614];
   const layers = [
-    { r: 1.4 * scale, h: 2.2 * scale, y: trunkH + 0.8 * scale },
-    { r: 1.1 * scale, h: 1.8 * scale, y: trunkH + 1.8 * scale },
-    { r: 0.7 * scale, h: 1.4 * scale, y: trunkH + 2.6 * scale },
+    { r: 1.4 * scale, h: 2.2 * scale, y: trunkH + 0.6 * scale },
+    { r: 1.0 * scale, h: 1.8 * scale, y: trunkH + 1.7 * scale },
+    { r: 0.6 * scale, h: 1.4 * scale, y: trunkH + 2.6 * scale },
   ];
 
   layers.forEach((l, i) => {
@@ -112,8 +127,6 @@ function makePineTree(x, z) {
     cone.position.set(x, l.y, z);
     scene.add(cone);
   });
-
-  scene.add(trunk);
 }
 
 for (let i = 0; i < 120; i++) {
@@ -126,17 +139,16 @@ for (let i = 0; i < 120; i++) {
 // --- ROCK CLUSTERS ---
 function makeRockCluster(cx, cz) {
   const rockCount = 2 + Math.floor(Math.random() * 4);
-  const rockColors = [0x888888, 0x777777, 0x999999, 0xaaaaaa, 0x666666];
+  const rockColors = [0x999999, 0x888888, 0xaaaaaa, 0x777777];
   for (let i = 0; i < rockCount; i++) {
-    const size = 0.4 + Math.random() * 1.2;
-    const color = rockColors[Math.floor(Math.random() * rockColors.length)];
+    const size = 0.4 + Math.random() * 1.0;
     const rock = new THREE.Mesh(
       new THREE.DodecahedronGeometry(size, 0),
-      new THREE.MeshLambertMaterial({ color })
+      new THREE.MeshLambertMaterial({ color: rockColors[Math.floor(Math.random() * rockColors.length)] })
     );
     rock.position.set(
       cx + (Math.random() - 0.5) * 3,
-      size * 0.4,
+      size * 0.5,
       cz + (Math.random() - 0.5) * 3
     );
     rock.rotation.set(
@@ -148,10 +160,10 @@ function makeRockCluster(cx, cz) {
   }
 }
 
-for (let i = 0; i < 35; i++) {
+for (let i = 0; i < 30; i++) {
   makeRockCluster(
-    Math.random() * 200 - 100,
-    Math.random() * 200 - 100
+    Math.random() * 180 - 90,
+    Math.random() * 180 - 90
   );
 }
 
