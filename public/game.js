@@ -114,7 +114,6 @@ function makeAvatar(color, name) {
   tagMesh.position.y = 2.6;
   tagMesh.name = 'nameTag';
 
-  // Speech bubble (hidden by default)
   const bubbleCanvas = document.createElement('canvas');
   bubbleCanvas.width = 512;
   bubbleCanvas.height = 128;
@@ -145,19 +144,16 @@ function showSpeechBubble(avatar, text) {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Bubble background
   ctx.fillStyle = 'white';
   ctx.roundRect(10, 10, canvas.width - 20, canvas.height - 30, 16);
   ctx.fill();
 
-  // Tail
   ctx.beginPath();
   ctx.moveTo(canvas.width / 2 - 10, canvas.height - 20);
   ctx.lineTo(canvas.width / 2, canvas.height);
   ctx.lineTo(canvas.width / 2 + 10, canvas.height - 20);
   ctx.fill();
 
-  // Text
   ctx.fillStyle = '#222';
   ctx.font = 'bold 26px sans-serif';
   ctx.textAlign = 'center';
@@ -175,14 +171,19 @@ function showSpeechBubble(avatar, text) {
 let myPlayer = null;
 let myColor = null;
 const otherPlayers = {};
+const PROXIMITY = 15;
 
 const keys = {};
 window.addEventListener('keydown', e => keys[e.key] = true);
 window.addEventListener('keyup', e => keys[e.key] = false);
 
 const messagesDiv = document.getElementById('messages');
+const chatBox = document.getElementById('chat-box');
 const chatInput = document.getElementById('chat-input');
 const chatSend = document.getElementById('chat-send');
+
+// Hide chat box by default
+chatBox.style.display = 'none';
 
 function showMessage(text) {
   const p = document.createElement('p');
@@ -202,6 +203,22 @@ chatSend.addEventListener('click', () => {
 chatInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') chatSend.click();
 });
+
+function checkProximity() {
+  if (!myPlayer) return;
+  let someoneNearby = false;
+  for (const id in otherPlayers) {
+    const other = otherPlayers[id];
+    const dx = myPlayer.position.x - other.position.x;
+    const dz = myPlayer.position.z - other.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist <= PROXIMITY) {
+      someoneNearby = true;
+      break;
+    }
+  }
+  chatBox.style.display = someoneNearby ? 'flex' : 'none';
+}
 
 socket.on('init', (players) => {
   for (const id in players) {
@@ -245,6 +262,7 @@ socket.on('playerMoved', (data) => {
     otherPlayers[data.id].position.x = data.x;
     otherPlayers[data.id].position.z = data.z;
   }
+  checkProximity();
 });
 
 socket.on('playerLeft', (id) => {
@@ -253,13 +271,12 @@ socket.on('playerLeft', (id) => {
     delete otherPlayers[id];
   }
   showMessage('A player left.');
+  checkProximity();
 });
 
 socket.on('chatMessage', (data) => {
   const label = data.id === socket.id ? 'You' : data.name || 'Player';
   showMessage(`${label}: ${data.msg}`);
-
-  // Show speech bubble on the correct avatar
   if (data.id === socket.id && myPlayer) {
     showSpeechBubble(myPlayer, data.msg);
   } else if (otherPlayers[data.id]) {
@@ -287,6 +304,7 @@ function animate() {
 
     if (moved) {
       socket.emit('move', { x: myPlayer.position.x, z: myPlayer.position.z });
+      checkProximity();
     }
 
     camera.position.x = myPlayer.position.x;
@@ -306,4 +324,4 @@ function animate() {
 
 animate();
 
-} // end initGame
+} 
