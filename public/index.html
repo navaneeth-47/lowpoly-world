@@ -52,8 +52,6 @@
       text-align: right;
       text-shadow: 1px 1px 2px black;
     }
-
-    /* Entry screen */
     #entry-screen {
       position: fixed;
       top: 0; left: 0;
@@ -73,15 +71,8 @@
       text-align: center;
       width: 480px;
     }
-    #entry-box h2 {
-      font-size: 26px;
-      margin-bottom: 6px;
-    }
-    #entry-box p {
-      font-size: 13px;
-      color: #aaa;
-      margin-bottom: 24px;
-    }
+    #entry-box h2 { font-size: 26px; margin-bottom: 6px; }
+    #entry-box p { font-size: 13px; color: #aaa; margin-bottom: 24px; }
     #name-input {
       padding: 10px 16px;
       border-radius: 20px;
@@ -92,8 +83,6 @@
       text-align: center;
       margin-bottom: 28px;
     }
-
-    /* Avatar picker */
     #avatar-picker {
       display: flex;
       justify-content: center;
@@ -117,7 +106,6 @@
     .avatar-option.selected { border-color: #4CAF50; background: rgba(76,175,80,0.15); }
     .avatar-option canvas { border-radius: 8px; }
     .avatar-option span { font-size: 12px; color: #ccc; }
-
     #join-btn {
       padding: 12px 40px;
       border-radius: 20px;
@@ -150,16 +138,7 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "/node_modules/three/build/three.module.js",
-      "three/addons/": "/node_modules/three/examples/jsm/",
-      "postprocessing": "/node_modules/postprocessing/build/postprocessing.esm.js"
-    }
-  }
-</script>
-  <script>window._io = io;</script>
-  <script type="module" src="game.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="game.js"></script>
 </body>
 </html>

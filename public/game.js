@@ -1,6 +1,3 @@
-import * as THREE from 'three';
-import { EffectComposer, RenderPass, EffectPass, BloomEffect, ToneMappingEffect, ToneMappingMode } from 'postprocessing';
-
 // ─── AVATAR DEFINITIONS ───────────────────────────────────────────────
 const AVATAR_TYPES = [
   { id: 'cute',   label: 'Cute' },
@@ -93,7 +90,7 @@ joinBtn.addEventListener('click', () => {
   if (!val) { nameInput.placeholder = 'Please enter a name!'; return; }
   myName = val;
   entryScreen.style.display = 'none';
-  const socket = window._io();
+  const socket = io();
   initGame(socket);
 });
 
@@ -104,50 +101,31 @@ function initGame(socket) {
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xd0e8f0);
-scene.fog = new THREE.FogExp2(0xd0e8f0, 0.008);
+scene.fog = new THREE.Fog(0xd0e8f0, 60, 160);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
-renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// ─── POST PROCESSING ──────────────────────────────────────────────────
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
-
-const bloomEffect = new BloomEffect({
-  intensity: 1.4,
-  luminanceThreshold: 0.4,
-  luminanceSmoothing: 0.7,
-  mipmapBlur: true,
-});
-
-const toneMappingEffect = new ToneMappingEffect({
-  mode: ToneMappingMode.ACES_FILMIC,
-});
-
-composer.addPass(new EffectPass(camera, bloomEffect, toneMappingEffect));
-
-// ─── LIGHTING ─────────────────────────────────────────────────────────
+// Lighting
 const sun = new THREE.DirectionalLight(0xfffbf0, 2.0);
 sun.position.set(60, 100, 40);
 sun.castShadow = true;
+sun.shadow.mapSize.width = 2048;
+sun.shadow.mapSize.height = 2048;
+sun.shadow.camera.near = 0.5;
+sun.shadow.camera.far = 300;
+sun.shadow.camera.left = -100;
+sun.shadow.camera.right = 100;
+sun.shadow.camera.top = 100;
+sun.shadow.camera.bottom = -100;
 scene.add(sun);
-
-const sky = new THREE.HemisphereLight(0x87ceeb, 0x4a7a20, 0.8);
-scene.add(sky);
-
+scene.add(new THREE.HemisphereLight(0x87ceeb, 0x4a7a20, 0.8));
 scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-
-// Subtle warm sun flare point light
-const sunGlow = new THREE.PointLight(0xffdd88, 2, 200);
-sunGlow.position.set(60, 80, 40);
-scene.add(sunGlow);
 
 // ─── TERRAIN ──────────────────────────────────────────────────────────
 const TILE_SIZE = 100;
@@ -212,8 +190,10 @@ function updateTiles(playerX, playerZ) {
     const [ktx, ktz] = key.split('_').map(Number);
     if (Math.abs(ktx - cx) > 2 || Math.abs(ktz - cz) > 2) {
       scene.remove(tileObjects[key]);
+      if (tileDecor[key]) scene.remove(tileDecor[key]);
       delete tiles[key];
       delete tileObjects[key];
+      delete tileDecor[key];
     }
   }
 }
@@ -228,7 +208,7 @@ function spawnTileDecor(tileX, tileZ) {
   const ox = tileX * TILE_SIZE;
   const oz = tileZ * TILE_SIZE;
 
-  // Trees with emissive glow on leaves
+  // Trees
   for (let i = 0; i < 20; i++) {
     const x = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
     const z = oz + Math.random() * TILE_SIZE - TILE_SIZE / 2;
@@ -242,21 +222,15 @@ function spawnTileDecor(tileX, tileZ) {
     trunk.position.set(x, baseH + trunkH / 2, z);
     trunk.castShadow = true;
     group.add(trunk);
-
-    const leafColors = [0x2d7a1a, 0x33881f, 0x226614];
-    const emissiveColors = [0x0a2a06, 0x0d3008, 0x082008];
+    const layerColors = [0x2d7a1a, 0x33881f, 0x226614];
     [
       { r: 1.4 * scale, h: 2.2 * scale, y: baseH + trunkH + 0.6 * scale },
       { r: 1.0 * scale, h: 1.8 * scale, y: baseH + trunkH + 1.7 * scale },
       { r: 0.6 * scale, h: 1.4 * scale, y: baseH + trunkH + 2.6 * scale },
-    ].forEach((l, i) => {
+    ].forEach((l, idx) => {
       const cone = new THREE.Mesh(
         new THREE.ConeGeometry(l.r, l.h, 7),
-        new THREE.MeshLambertMaterial({
-          color: leafColors[i],
-          emissive: new THREE.Color(emissiveColors[i]),
-          emissiveIntensity: 0.3
-        })
+        new THREE.MeshLambertMaterial({ color: layerColors[idx] })
       );
       cone.position.set(x, l.y, z);
       cone.castShadow = true;
@@ -266,9 +240,9 @@ function spawnTileDecor(tileX, tileZ) {
 
   // Rocks
   for (let i = 0; i < 6; i++) {
-    const cx2 = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
-    const cz2 = oz + Math.random() * TILE_SIZE - TILE_SIZE / 2;
-    const baseH = getTerrainHeight(cx2, cz2);
+    const cx = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
+    const cz = oz + Math.random() * TILE_SIZE - TILE_SIZE / 2;
+    const baseH = getTerrainHeight(cx, cz);
     const count = 2 + Math.floor(Math.random() * 3);
     for (let j = 0; j < count; j++) {
       const size = 0.4 + Math.random() * 0.9;
@@ -277,9 +251,9 @@ function spawnTileDecor(tileX, tileZ) {
         new THREE.MeshLambertMaterial({ color: [0x999999, 0x888888, 0xaaaaaa][j % 3] })
       );
       rock.position.set(
-        cx2 + (Math.random() - 0.5) * 3,
+        cx + (Math.random() - 0.5) * 3,
         baseH + size * 0.5,
-        cz2 + (Math.random() - 0.5) * 3
+        cz + (Math.random() - 0.5) * 3
       );
       rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
       rock.castShadow = true;
@@ -287,7 +261,7 @@ function spawnTileDecor(tileX, tileZ) {
     }
   }
 
-  // Flowers with emissive glow
+  // Flowers
   const flowerColors = [0xff4488, 0xff8800, 0xffff00, 0xff00ff, 0x00ffff];
   for (let i = 0; i < 40; i++) {
     const x = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
@@ -295,26 +269,20 @@ function spawnTileDecor(tileX, tileZ) {
     const baseH = getTerrainHeight(x, z);
     const color = flowerColors[Math.floor(Math.random() * flowerColors.length)];
     const stemH = 0.3 + Math.random() * 0.3;
-
     const stem = new THREE.Mesh(
       new THREE.CylinderGeometry(0.02, 0.02, stemH, 4),
       new THREE.MeshLambertMaterial({ color: 0x33aa33 })
     );
     stem.position.set(x, baseH + stemH / 2, z);
-
     const flower = new THREE.Mesh(
       new THREE.SphereGeometry(0.1, 5, 5),
-      new THREE.MeshLambertMaterial({
-        color,
-        emissive: new THREE.Color(color),
-        emissiveIntensity: 0.6
-      })
+      new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.4 })
     );
     flower.position.set(x, baseH + stemH + 0.1, z);
     group.add(stem, flower);
   }
 
-  // Grass blades
+  // Grass
   for (let i = 0; i < 120; i++) {
     const x = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
     const z = oz + Math.random() * TILE_SIZE - TILE_SIZE / 2;
@@ -333,7 +301,7 @@ function spawnTileDecor(tileX, tileZ) {
   tileDecor[key] = group;
 }
 
-// ─── AVATAR ────────────────────────────────────────────────────────────
+// ─── NAME TAG ──────────────────────────────────────────────────────────
 function makeNameTag(name) {
   const canvas = document.createElement('canvas');
   canvas.width = 256; canvas.height = 64;
@@ -347,9 +315,10 @@ function makeNameTag(name) {
   return new THREE.CanvasTexture(canvas);
 }
 
+// ─── AVATAR ────────────────────────────────────────────────────────────
 function makeAvatar(color, name, type) {
   const group = new THREE.Group();
-  const mat = new THREE.MeshLambertMaterial({ color });
+  const mat     = new THREE.MeshLambertMaterial({ color });
   const darkMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
   const greyMat = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
 
@@ -390,24 +359,24 @@ function makeAvatar(color, name, type) {
   } else if (type === 'ghost') {
     const glowMat = new THREE.MeshLambertMaterial({
       color, transparent: true, opacity: 0.85,
-      emissive: new THREE.Color(color), emissiveIntensity: 0.4
+      emissive: color, emissiveIntensity: 0.4
     });
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8, 0, Math.PI * 2, 0, Math.PI * 0.65), glowMat);
     body.position.y = 1.3;
     const bottom = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.8, 8), glowMat);
     bottom.position.y = 0.85;
     const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 5),
-      new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: new THREE.Color(0xffffff), emissiveIntensity: 2 }));
+      new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1 }));
     eyeL.position.set(-0.18, 1.45, 0.44);
     const eyeR = eyeL.clone(); eyeR.position.set(0.18, 1.45, 0.44);
     const halo = new THREE.Mesh(
       new THREE.TorusGeometry(0.55, 0.06, 6, 12),
-      new THREE.MeshLambertMaterial({ color, emissive: new THREE.Color(color), emissiveIntensity: 1.5 })
+      new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 1.0 })
     );
     halo.position.y = 2.0; halo.rotation.x = Math.PI / 2;
     group.add(body, bottom, eyeL, eyeR, halo);
 
-  } else if (type === 'human') {
+  } else {
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), mat);
     head.position.y = 1.75;
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.35), mat);
@@ -572,7 +541,6 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 // ─── LOOP ──────────────────────────────────────────────────────────────
@@ -607,9 +575,9 @@ function animate() {
     if (obj.name === 'nameTag' || obj.name === 'speechBubble') obj.lookAt(camera.position);
   });
 
-  composer.render();
+  renderer.render(scene, camera);
 }
 
 animate();
 
-} // end initGame
+} 

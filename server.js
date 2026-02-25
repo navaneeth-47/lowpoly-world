@@ -1,13 +1,14 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static('public'));
-app.use('/node_modules', express.static('node_modules'));
+app.use('/node_modules', express.static(path.join(__dirname, 'node_modules')));
 
 const players = {};
 
