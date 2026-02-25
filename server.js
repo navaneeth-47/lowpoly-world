@@ -18,7 +18,8 @@ io.on('connection', (socket) => {
     id: socket.id,
     x: Math.random() * 80 - 40,
     z: Math.random() * 80 - 40,
-    color: Math.floor(Math.random() * 0xffffff)
+    color: Math.floor(Math.random() * 0xffffff),
+    name: 'Guest'
   };
 
   // Send current players to the new player
@@ -28,6 +29,13 @@ io.on('connection', (socket) => {
   socket.broadcast.emit('playerJoined', players[socket.id]);
 
   // When a player moves
+socket.on('setName', (name) => {
+    if (players[socket.id]) {
+      players[socket.id].name = name.slice(0, 16);
+      io.emit('playerNamed', { id: socket.id, name: players[socket.id].name });
+    }
+  });
+
   socket.on('move', (data) => {
     if (players[socket.id]) {
       players[socket.id].x = data.x;
@@ -49,6 +57,7 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(3000, () => {
-  console.log('Server running at http://localhost:3000');
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

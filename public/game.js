@@ -1,5 +1,24 @@
 const socket = io();
 
+// Name entry
+const nameScreen = document.getElementById('name-screen');
+const nameInput = document.getElementById('name-input');
+const nameBtn = document.getElementById('name-btn');
+let myName = 'Guest';
+
+nameBtn.addEventListener('click', () => {
+  const val = nameInput.value.trim();
+  if (val) {
+    myName = val;
+    socket.emit('setName', myName);
+    nameScreen.style.display = 'none';
+  }
+});
+
+nameInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') nameBtn.click();
+});
+
 // Scene setup
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
@@ -21,7 +40,6 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 const groundGeo = new THREE.PlaneGeometry(200, 200, 20, 20);
 const groundMat = new THREE.MeshLambertMaterial({ color: 0x5a8a3c });
 
-// Make ground bumpy for low poly feel
 const pos = groundGeo.attributes.position;
 for (let i = 0; i < pos.count; i++) {
   pos.setY(i, Math.random() * 1.5);
@@ -50,7 +68,6 @@ function makeTree(x, z) {
   scene.add(leaves);
 }
 
-// Scatter trees
 for (let i = 0; i < 60; i++) {
   makeTree(Math.random() * 160 - 80, Math.random() * 160 - 80);
 }
@@ -70,8 +87,8 @@ for (let i = 0; i < 30; i++) {
   makeRock(Math.random() * 160 - 80, Math.random() * 160 - 80);
 }
 
-// Player avatar (low poly capsule shape)
-function makeAvatar(color) {
+// Avatar with name tag
+function makeAvatar(color, name) {
   const group = new THREE.Group();
 
   const body = new THREE.Mesh(
@@ -86,8 +103,30 @@ function makeAvatar(color) {
   );
   head.position.y = 1.8;
 
+  // Name tag
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.roundRect(0, 0, 256, 64, 12);
+  ctx.fill();
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 28px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(name || 'Guest', 128, 42);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const tagMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 0.5),
+    new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false })
+  );
+  tagMesh.position.y = 2.6;
+  tagMesh.name = 'nameTag';
+
   group.add(body);
   group.add(head);
+  group.add(tagMesh);
   return group;
 }
 
@@ -131,11 +170,11 @@ socket.on('init', (players) => {
     const p = players[id];
     if (id === socket.id) {
       myColor = p.color;
-      myPlayer = makeAvatar(myColor);
+      myPlayer = makeAvatar(myColor, myName);
       myPlayer.position.set(p.x, 0, p.z);
       scene.add(myPlayer);
     } else {
-      const avatar = makeAvatar(p.color);
+      const avatar = makeAvatar(p.color, p.name);
       avatar.position.set(p.x, 0, p.z);
       scene.add(avatar);
       otherPlayers[id] = avatar;
@@ -144,11 +183,33 @@ socket.on('init', (players) => {
 });
 
 socket.on('playerJoined', (p) => {
-  const avatar = makeAvatar(p.color);
+  const avatar = makeAvatar(p.color, p.name);
   avatar.position.set(p.x, 0, p.z);
   scene.add(avatar);
   otherPlayers[p.id] = avatar;
-  showMessage('A new player joined!');
+  showMessage(`${p.name} joined the world!`);
+});
+
+socket.on('playerNamed', (data) => {
+  if (otherPlayers[data.id]) {
+    const avatar = otherPlayers[data.id];
+    const tag = avatar.getObjectByName('nameTag');
+    if (tag) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.roundRect(0, 0, 256, 64, 12);
+      ctx.fill();
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(data.name, 128, 42);
+      tag.material.map = new THREE.CanvasTexture(canvas);
+      tag.material.map.needsUpdate = true;
+    }
+  }
 });
 
 socket.on('playerMoved', (data) => {
@@ -167,7 +228,7 @@ socket.on('playerLeft', (id) => {
 });
 
 socket.on('chatMessage', (data) => {
-  const label = data.id === socket.id ? 'You' : 'Player';
+  const label = data.id === socket.id ? `You` : `${data.name || 'Player'}`;
   showMessage(`${label}: ${data.msg}`);
 });
 
@@ -202,6 +263,13 @@ function animate() {
     camera.position.z = myPlayer.position.z + 12;
     camera.lookAt(myPlayer.position);
   }
+
+  // Name tags always face camera
+  scene.traverse((obj) => {
+    if (obj.name === 'nameTag') {
+      obj.lookAt(camera.position);
+    }
+  });
 
   renderer.render(scene, camera);
 }
