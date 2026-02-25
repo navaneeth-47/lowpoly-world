@@ -404,4 +404,4 @@ function animate() {
 
 animate();
 
-} // end initGame
+} 
