@@ -13,7 +13,6 @@ const players = {};
 io.on('connection', (socket) => {
   console.log('A player joined:', socket.id);
 
-  // Assign random avatar color and starting position
   players[socket.id] = {
     id: socket.id,
     x: Math.random() * 80 - 40,
@@ -22,14 +21,10 @@ io.on('connection', (socket) => {
     name: 'Guest'
   };
 
-  // Send current players to the new player
   socket.emit('init', players);
-
-  // Tell everyone else about the new player
   socket.broadcast.emit('playerJoined', players[socket.id]);
 
-  // When a player moves
-socket.on('setName', (name) => {
+  socket.on('setName', (name) => {
     if (players[socket.id]) {
       players[socket.id].name = name.slice(0, 16);
       io.emit('playerNamed', { id: socket.id, name: players[socket.id].name });
@@ -44,12 +39,23 @@ socket.on('setName', (name) => {
     }
   });
 
-  // When a player sends a chat message
   socket.on('chatMessage', (msg) => {
-    io.emit('chatMessage', { id: socket.id, msg: msg });
+    const sender = players[socket.id];
+    if (!sender) return;
+
+    // Only send to nearby players
+    const PROXIMITY = 15;
+    for (const id in players) {
+      const other = players[id];
+      const dx = sender.x - other.x;
+      const dz = sender.z - other.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist <= PROXIMITY) {
+        io.to(id).emit('chatMessage', { id: socket.id, name: sender.name, msg });
+      }
+    }
   });
 
-  // When a player disconnects
   socket.on('disconnect', () => {
     console.log('Player left:', socket.id);
     delete players[socket.id];

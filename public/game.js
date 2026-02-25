@@ -20,7 +20,6 @@ nameInput.addEventListener('keydown', e => {
 
 function initGame(socket) {
 
-// Scene setup
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 scene.fog = new THREE.Fog(0x87CEEB, 30, 100);
@@ -31,49 +30,40 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
-// Lighting
 const sun = new THREE.DirectionalLight(0xffffff, 1);
 sun.position.set(20, 40, 20);
 scene.add(sun);
 scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-// Ground
 const groundGeo = new THREE.PlaneGeometry(200, 200, 20, 20);
 const groundMat = new THREE.MeshLambertMaterial({ color: 0x5a8a3c });
-
 const pos = groundGeo.attributes.position;
 for (let i = 0; i < pos.count; i++) {
   pos.setY(i, Math.random() * 1.5);
 }
 groundGeo.computeVertexNormals();
-
 const ground = new THREE.Mesh(groundGeo, groundMat);
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-// Low poly trees
 function makeTree(x, z) {
   const trunk = new THREE.Mesh(
     new THREE.CylinderGeometry(0.2, 0.3, 1.5, 5),
     new THREE.MeshLambertMaterial({ color: 0x8B4513 })
   );
   trunk.position.set(x, 0.75, z);
-
   const leaves = new THREE.Mesh(
     new THREE.ConeGeometry(1.5, 3, 6),
     new THREE.MeshLambertMaterial({ color: 0x2d6a2d })
   );
   leaves.position.set(x, 3.5, z);
-
   scene.add(trunk);
   scene.add(leaves);
 }
-
 for (let i = 0; i < 60; i++) {
   makeTree(Math.random() * 160 - 80, Math.random() * 160 - 80);
 }
 
-// Low poly rocks
 function makeRock(x, z) {
   const rock = new THREE.Mesh(
     new THREE.DodecahedronGeometry(0.6 + Math.random() * 0.4, 0),
@@ -83,12 +73,25 @@ function makeRock(x, z) {
   rock.rotation.y = Math.random() * Math.PI;
   scene.add(rock);
 }
-
 for (let i = 0; i < 30; i++) {
   makeRock(Math.random() * 160 - 80, Math.random() * 160 - 80);
 }
 
-// Avatar with name tag
+function makeNameTag(name) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.roundRect(0, 0, 256, 64, 12);
+  ctx.fill();
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 28px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(name || 'Guest', 128, 42);
+  return new THREE.CanvasTexture(canvas);
+}
+
 function makeAvatar(color, name) {
   const group = new THREE.Group();
 
@@ -104,44 +107,79 @@ function makeAvatar(color, name) {
   );
   head.position.y = 1.8;
 
-  // Name tag
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.roundRect(0, 0, 256, 64, 12);
-  ctx.fill();
-  ctx.fillStyle = 'white';
-  ctx.font = 'bold 28px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(name || 'Guest', 128, 42);
-
-  const texture = new THREE.CanvasTexture(canvas);
   const tagMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(2, 0.5),
-    new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false })
+    new THREE.MeshBasicMaterial({ map: makeNameTag(name), transparent: true, depthWrite: false })
   );
   tagMesh.position.y = 2.6;
   tagMesh.name = 'nameTag';
 
+  // Speech bubble (hidden by default)
+  const bubbleCanvas = document.createElement('canvas');
+  bubbleCanvas.width = 512;
+  bubbleCanvas.height = 128;
+  const bubbleTexture = new THREE.CanvasTexture(bubbleCanvas);
+  const bubble = new THREE.Mesh(
+    new THREE.PlaneGeometry(4, 1),
+    new THREE.MeshBasicMaterial({ map: bubbleTexture, transparent: true, depthWrite: false })
+  );
+  bubble.position.y = 3.4;
+  bubble.name = 'speechBubble';
+  bubble.visible = false;
+  bubble.userData.canvas = bubbleCanvas;
+  bubble.userData.texture = bubbleTexture;
+  bubble.userData.timeout = null;
+
   group.add(body);
   group.add(head);
   group.add(tagMesh);
+  group.add(bubble);
   return group;
 }
 
-// My player
+function showSpeechBubble(avatar, text) {
+  const bubble = avatar.getObjectByName('speechBubble');
+  if (!bubble) return;
+
+  const canvas = bubble.userData.canvas;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Bubble background
+  ctx.fillStyle = 'white';
+  ctx.roundRect(10, 10, canvas.width - 20, canvas.height - 30, 16);
+  ctx.fill();
+
+  // Tail
+  ctx.beginPath();
+  ctx.moveTo(canvas.width / 2 - 10, canvas.height - 20);
+  ctx.lineTo(canvas.width / 2, canvas.height);
+  ctx.lineTo(canvas.width / 2 + 10, canvas.height - 20);
+  ctx.fill();
+
+  // Text
+  ctx.fillStyle = '#222';
+  ctx.font = 'bold 26px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(text.slice(0, 40), canvas.width / 2, 65);
+
+  bubble.userData.texture.needsUpdate = true;
+  bubble.visible = true;
+
+  if (bubble.userData.timeout) clearTimeout(bubble.userData.timeout);
+  bubble.userData.timeout = setTimeout(() => {
+    bubble.visible = false;
+  }, 5000);
+}
+
 let myPlayer = null;
 let myColor = null;
 const otherPlayers = {};
 
-// Movement
 const keys = {};
 window.addEventListener('keydown', e => keys[e.key] = true);
 window.addEventListener('keyup', e => keys[e.key] = false);
 
-// Chat
 const messagesDiv = document.getElementById('messages');
 const chatInput = document.getElementById('chat-input');
 const chatSend = document.getElementById('chat-send');
@@ -165,7 +203,6 @@ chatInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') chatSend.click();
 });
 
-// Socket events
 socket.on('init', (players) => {
   for (const id in players) {
     const p = players[id];
@@ -197,18 +234,7 @@ socket.on('playerNamed', (data) => {
     const avatar = otherPlayers[data.id];
     const tag = avatar.getObjectByName('nameTag');
     if (tag) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 256;
-      canvas.height = 64;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.roundRect(0, 0, 256, 64, 12);
-      ctx.fill();
-      ctx.fillStyle = 'white';
-      ctx.font = 'bold 28px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(data.name, 128, 42);
-      tag.material.map = new THREE.CanvasTexture(canvas);
+      tag.material.map = makeNameTag(data.name);
       tag.material.map.needsUpdate = true;
     }
   }
@@ -230,18 +256,23 @@ socket.on('playerLeft', (id) => {
 });
 
 socket.on('chatMessage', (data) => {
-  const label = data.id === socket.id ? 'You' : `${data.name || 'Player'}`;
+  const label = data.id === socket.id ? 'You' : data.name || 'Player';
   showMessage(`${label}: ${data.msg}`);
+
+  // Show speech bubble on the correct avatar
+  if (data.id === socket.id && myPlayer) {
+    showSpeechBubble(myPlayer, data.msg);
+  } else if (otherPlayers[data.id]) {
+    showSpeechBubble(otherPlayers[data.id], data.msg);
+  }
 });
 
-// Resize
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Game loop
 const speed = 0.1;
 
 function animate() {
@@ -249,7 +280,6 @@ function animate() {
 
   if (myPlayer) {
     let moved = false;
-
     if (keys['ArrowUp'] || keys['w'] || keys['W']) { myPlayer.position.z -= speed; moved = true; }
     if (keys['ArrowDown'] || keys['s'] || keys['S']) { myPlayer.position.z += speed; moved = true; }
     if (keys['ArrowLeft'] || keys['a'] || keys['A']) { myPlayer.position.x -= speed; moved = true; }
@@ -259,16 +289,14 @@ function animate() {
       socket.emit('move', { x: myPlayer.position.x, z: myPlayer.position.z });
     }
 
-    // Camera follows player
     camera.position.x = myPlayer.position.x;
     camera.position.y = myPlayer.position.y + 10;
     camera.position.z = myPlayer.position.z + 12;
     camera.lookAt(myPlayer.position);
   }
 
-  // Name tags always face camera
   scene.traverse((obj) => {
-    if (obj.name === 'nameTag') {
+    if (obj.name === 'nameTag' || obj.name === 'speechBubble') {
       obj.lookAt(camera.position);
     }
   });
