@@ -36,56 +36,70 @@ sun.position.set(40, 80, 40);
 scene.add(sun);
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-// --- FLAT GREEN GROUND ---
-const groundGeo = new THREE.PlaneGeometry(300, 300);
-const groundMat = new THREE.MeshLambertMaterial({ color: 0x88bb22 });
-const ground = new THREE.Mesh(groundGeo, groundMat);
-ground.rotation.x = -Math.PI / 2;
-ground.position.y = 0;
-scene.add(ground);
+// --- TERRAIN with smooth hills ---
+const TERRAIN_SIZE = 300;
+const TERRAIN_SEGS = 80;
+const terrainGeo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
+terrainGeo.rotateX(-Math.PI / 2);
 
-// --- RAISED TERRAIN PLATEAUS (cliffs from reference) ---
-// These are flat boxes sitting ON the ground with brown sides visible
-function makePlateau(x, z, w, d, h) {
-  // Top surface - green
-  const top = new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
-    [
-      new THREE.MeshLambertMaterial({ color: 0x7a4010 }), // right side brown
-      new THREE.MeshLambertMaterial({ color: 0x7a4010 }), // left side brown
-      new THREE.MeshLambertMaterial({ color: 0x99cc22 }), // top green
-      new THREE.MeshLambertMaterial({ color: 0x5a3008 }), // bottom
-      new THREE.MeshLambertMaterial({ color: 0x7a4010 }), // front brown
-      new THREE.MeshLambertMaterial({ color: 0x7a4010 }), // back brown
-    ]
+// Simple noise function
+function smoothNoise(x, z) {
+  return (
+    Math.sin(x * 0.03) * Math.cos(z * 0.03) * 4 +
+    Math.sin(x * 0.07 + 1.2) * Math.cos(z * 0.05 + 0.8) * 2.5 +
+    Math.sin(x * 0.15 + 2.1) * Math.cos(z * 0.13 + 1.5) * 1.2 +
+    Math.sin(x * 0.25) * Math.cos(z * 0.2) * 0.5
   );
-  top.position.set(x, h / 2, z);
-  scene.add(top);
 }
 
-// Place plateaus around edges to create cliff walls like the reference
-makePlateau(-80, 0, 40, 300, 8);   // left wall
-makePlateau(80, 0, 40, 300, 8);    // right wall
-makePlateau(0, -80, 300, 40, 8);   // back wall
-makePlateau(0, 80, 300, 40, 8);    // front wall
-makePlateau(-50, -40, 30, 80, 6);  // inner cliff left
-makePlateau(45, 30, 25, 70, 5);    // inner cliff right
-makePlateau(-20, 50, 60, 25, 7);   // inner cliff top
+const terrainPositions = terrainGeo.attributes.position;
+const terrainHeights = [];
+for (let i = 0; i < terrainPositions.count; i++) {
+  const x = terrainPositions.getX(i);
+  const z = terrainPositions.getZ(i);
+  const h = smoothNoise(x, z);
+  terrainPositions.setY(i, h);
+  terrainHeights.push({ x, z, h });
+}
+terrainGeo.computeVertexNormals();
+
+// Color terrain by height - low=green, high=brown like reference
+const terrainColors = [];
+for (let i = 0; i < terrainPositions.count; i++) {
+  const h = terrainPositions.getY(i);
+  if (h < 1) {
+    terrainColors.push(0.53, 0.73, 0.13); // bright yellow-green
+  } else if (h < 2.5) {
+    terrainColors.push(0.47, 0.65, 0.10); // medium green
+  } else {
+    terrainColors.push(0.48, 0.25, 0.06); // brown hilltop
+  }
+}
+terrainGeo.setAttribute('color', new THREE.Float32BufferAttribute(terrainColors, 3));
+const terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+scene.add(terrain);
+
+// Function to get terrain height at any x,z position
+function getTerrainHeight(x, z) {
+  return smoothNoise(x, z);
+}
 
 // --- GRASS PATCHES ---
 function makeGrass(x, z) {
   const grassColors = [0x44aa22, 0x55bb33, 0x33991a, 0x66cc44, 0x3d8c1a];
-  const count = 4 + Math.floor(Math.random() * 4);
+  const count = 3 + Math.floor(Math.random() * 3);
+  const baseH = getTerrainHeight(x, z);
   for (let i = 0; i < count; i++) {
     const color = grassColors[Math.floor(Math.random() * grassColors.length)];
-    const height = 0.3 + Math.random() * 0.5;
+    const height = 0.3 + Math.random() * 0.4;
     const blade = new THREE.Mesh(
       new THREE.ConeGeometry(0.05, height, 3),
       new THREE.MeshLambertMaterial({ color })
     );
     blade.position.set(
       x + (Math.random() - 0.5) * 0.8,
-      height / 2,
+      baseH + height / 2,
       z + (Math.random() - 0.5) * 0.8
     );
     blade.rotation.z = (Math.random() - 0.5) * 0.3;
@@ -94,29 +108,29 @@ function makeGrass(x, z) {
 }
 
 for (let i = 0; i < 500; i++) {
-  makeGrass(
-    Math.random() * 140 - 70,
-    Math.random() * 140 - 70
-  );
+  const x = Math.random() * 140 - 70;
+  const z = Math.random() * 140 - 70;
+  makeGrass(x, z);
 }
 
 // --- PINE TREES ---
 function makePineTree(x, z) {
   const scale = 0.8 + Math.random() * 0.9;
   const trunkH = 1.2 * scale;
+  const baseH = getTerrainHeight(x, z);
 
   const trunk = new THREE.Mesh(
     new THREE.CylinderGeometry(0.12 * scale, 0.18 * scale, trunkH, 5),
     new THREE.MeshLambertMaterial({ color: 0x3a1f00 })
   );
-  trunk.position.set(x, trunkH / 2, z);
+  trunk.position.set(x, baseH + trunkH / 2, z);
   scene.add(trunk);
 
   const layerColors = [0x2d7a1a, 0x33881f, 0x226614];
   const layers = [
-    { r: 1.4 * scale, h: 2.2 * scale, y: trunkH + 0.6 * scale },
-    { r: 1.0 * scale, h: 1.8 * scale, y: trunkH + 1.7 * scale },
-    { r: 0.6 * scale, h: 1.4 * scale, y: trunkH + 2.6 * scale },
+    { r: 1.4 * scale, h: 2.2 * scale, y: baseH + trunkH + 0.6 * scale },
+    { r: 1.0 * scale, h: 1.8 * scale, y: baseH + trunkH + 1.7 * scale },
+    { r: 0.6 * scale, h: 1.4 * scale, y: baseH + trunkH + 2.6 * scale },
   ];
 
   layers.forEach((l, i) => {
@@ -140,6 +154,7 @@ for (let i = 0; i < 120; i++) {
 function makeRockCluster(cx, cz) {
   const rockCount = 2 + Math.floor(Math.random() * 4);
   const rockColors = [0x999999, 0x888888, 0xaaaaaa, 0x777777];
+  const baseH = getTerrainHeight(cx, cz);
   for (let i = 0; i < rockCount; i++) {
     const size = 0.4 + Math.random() * 1.0;
     const rock = new THREE.Mesh(
@@ -148,7 +163,7 @@ function makeRockCluster(cx, cz) {
     );
     rock.position.set(
       cx + (Math.random() - 0.5) * 3,
-      size * 0.5,
+      baseH + size * 0.5,
       cz + (Math.random() - 0.5) * 3
     );
     rock.rotation.set(
@@ -306,11 +321,13 @@ socket.on('init', (players) => {
     if (id === socket.id) {
       myColor = p.color;
       myPlayer = makeAvatar(myColor, myName);
-      myPlayer.position.set(p.x, 0, p.z);
+      const h = getTerrainHeight(p.x, p.z);
+      myPlayer.position.set(p.x, h, p.z);
       scene.add(myPlayer);
     } else {
       const avatar = makeAvatar(p.color, p.name);
-      avatar.position.set(p.x, 0, p.z);
+      const h = getTerrainHeight(p.x, p.z);
+      avatar.position.set(p.x, h, p.z);
       scene.add(avatar);
       otherPlayers[id] = avatar;
     }
@@ -320,7 +337,8 @@ socket.on('init', (players) => {
 
 socket.on('playerJoined', (p) => {
   const avatar = makeAvatar(p.color, p.name);
-  avatar.position.set(p.x, 0, p.z);
+  const h = getTerrainHeight(p.x, p.z);
+  avatar.position.set(p.x, h, p.z);
   scene.add(avatar);
   otherPlayers[p.id] = avatar;
   showMessage(`${p.name} joined the world!`);
@@ -338,8 +356,8 @@ socket.on('playerNamed', (data) => {
 
 socket.on('playerMoved', (data) => {
   if (otherPlayers[data.id]) {
-    otherPlayers[data.id].position.x = data.x;
-    otherPlayers[data.id].position.z = data.z;
+    const h = getTerrainHeight(data.x, data.z);
+    otherPlayers[data.id].position.set(data.x, h, data.z);
   }
   checkProximity();
 });
@@ -369,7 +387,7 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-const speed = 0.1;
+const speed = 0.12;
 
 function animate() {
   requestAnimationFrame(animate);
@@ -380,6 +398,10 @@ function animate() {
     if (keys['ArrowDown'] || keys['s'] || keys['S']) { myPlayer.position.z += speed; moved = true; }
     if (keys['ArrowLeft'] || keys['a'] || keys['A']) { myPlayer.position.x -= speed; moved = true; }
     if (keys['ArrowRight'] || keys['d'] || keys['D']) { myPlayer.position.x += speed; moved = true; }
+
+    // Snap player to terrain height smoothly
+    const targetH = getTerrainHeight(myPlayer.position.x, myPlayer.position.z);
+    myPlayer.position.y += (targetH - myPlayer.position.y) * 0.2;
 
     if (moved) {
       socket.emit('move', { x: myPlayer.position.x, z: myPlayer.position.z });
