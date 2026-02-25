@@ -1,3 +1,6 @@
+import * as THREE from 'three';
+import { EffectComposer, RenderPass, EffectPass, BloomEffect, ToneMappingEffect, ToneMappingMode } from 'postprocessing';
+
 // ─── AVATAR DEFINITIONS ───────────────────────────────────────────────
 const AVATAR_TYPES = [
   { id: 'cute',   label: 'Cute' },
@@ -6,21 +9,16 @@ const AVATAR_TYPES = [
   { id: 'human',  label: 'Human' },
 ];
 
-// Draw a tiny 2D preview of each avatar type onto a canvas
 function drawAvatarPreview(type, color) {
   const c = document.createElement('canvas');
   c.width = 60; c.height = 80;
   const ctx = c.getContext('2d');
   const hex = '#' + color.toString(16).padStart(6, '0');
-
   ctx.fillStyle = hex;
 
   if (type === 'cute') {
-    // Big round head
     ctx.beginPath(); ctx.arc(30, 28, 20, 0, Math.PI * 2); ctx.fill();
-    // Small body
     ctx.beginPath(); ctx.ellipse(30, 60, 12, 16, 0, 0, Math.PI * 2); ctx.fill();
-    // Eyes
     ctx.fillStyle = 'white';
     ctx.beginPath(); ctx.arc(23, 25, 4, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(37, 25, 4, 0, Math.PI * 2); ctx.fill();
@@ -28,31 +26,21 @@ function drawAvatarPreview(type, color) {
     ctx.beginPath(); ctx.arc(24, 25, 2, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(38, 25, 2, 0, Math.PI * 2); ctx.fill();
   } else if (type === 'knight') {
-    // Body
     ctx.fillRect(18, 40, 24, 28);
-    // Helmet
     ctx.beginPath(); ctx.arc(30, 25, 16, Math.PI, 0); ctx.fill();
     ctx.fillRect(14, 25, 32, 18);
-    // Visor
-    ctx.fillStyle = '#222';
-    ctx.fillRect(20, 28, 20, 7);
-    // Sword
-    ctx.fillStyle = '#aaa';
-    ctx.fillRect(48, 20, 4, 40);
-    ctx.fillStyle = hex;
-    ctx.fillRect(44, 35, 12, 5);
+    ctx.fillStyle = '#222'; ctx.fillRect(20, 28, 20, 7);
+    ctx.fillStyle = '#aaa'; ctx.fillRect(48, 20, 4, 40);
+    ctx.fillStyle = hex; ctx.fillRect(44, 35, 12, 5);
   } else if (type === 'ghost') {
-    // Glowy ghost body
     ctx.globalAlpha = 0.85;
     ctx.beginPath();
     ctx.arc(30, 30, 20, Math.PI, 0);
     ctx.lineTo(50, 70);
     ctx.bezierCurveTo(44, 62, 36, 68, 30, 62);
     ctx.bezierCurveTo(24, 68, 16, 62, 10, 70);
-    ctx.lineTo(10, 30);
-    ctx.fill();
+    ctx.lineTo(10, 30); ctx.fill();
     ctx.globalAlpha = 1;
-    // Eyes
     ctx.fillStyle = 'white';
     ctx.beginPath(); ctx.arc(23, 28, 5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(37, 28, 5, 0, Math.PI * 2); ctx.fill();
@@ -60,21 +48,14 @@ function drawAvatarPreview(type, color) {
     ctx.beginPath(); ctx.arc(24, 29, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(38, 29, 2.5, 0, Math.PI * 2); ctx.fill();
   } else if (type === 'human') {
-    // Head
     ctx.beginPath(); ctx.arc(30, 18, 13, 0, Math.PI * 2); ctx.fill();
-    // Body
     ctx.fillRect(20, 32, 20, 24);
-    // Legs
-    ctx.fillRect(20, 56, 8, 18);
-    ctx.fillRect(32, 56, 8, 18);
-    // Arms
-    ctx.fillRect(10, 33, 9, 18);
-    ctx.fillRect(41, 33, 9, 18);
+    ctx.fillRect(20, 56, 8, 18); ctx.fillRect(32, 56, 8, 18);
+    ctx.fillRect(10, 33, 9, 18); ctx.fillRect(41, 33, 9, 18);
   }
   return c;
 }
 
-// Build avatar picker UI
 let selectedAvatar = 'cute';
 const pickerEl = document.getElementById('avatar-picker');
 
@@ -112,7 +93,7 @@ joinBtn.addEventListener('click', () => {
   if (!val) { nameInput.placeholder = 'Please enter a name!'; return; }
   myName = val;
   entryScreen.style.display = 'none';
-  const socket = io();
+  const socket = window._io();
   initGame(socket);
 });
 
@@ -123,18 +104,50 @@ function initGame(socket) {
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xd0e8f0);
-scene.fog = new THREE.Fog(0xd0e8f0, 60, 160);
+scene.fog = new THREE.FogExp2(0xd0e8f0, 0.008);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+renderer.outputEncoding = THREE.sRGBEncoding;
 document.body.appendChild(renderer.domElement);
 
-const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-sun.position.set(40, 80, 40);
+// ─── POST PROCESSING ──────────────────────────────────────────────────
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+const bloomEffect = new BloomEffect({
+  intensity: 1.4,
+  luminanceThreshold: 0.4,
+  luminanceSmoothing: 0.7,
+  mipmapBlur: true,
+});
+
+const toneMappingEffect = new ToneMappingEffect({
+  mode: ToneMappingMode.ACES_FILMIC,
+});
+
+composer.addPass(new EffectPass(camera, bloomEffect, toneMappingEffect));
+
+// ─── LIGHTING ─────────────────────────────────────────────────────────
+const sun = new THREE.DirectionalLight(0xfffbf0, 2.0);
+sun.position.set(60, 100, 40);
+sun.castShadow = true;
 scene.add(sun);
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+const sky = new THREE.HemisphereLight(0x87ceeb, 0x4a7a20, 0.8);
+scene.add(sky);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+
+// Subtle warm sun flare point light
+const sunGlow = new THREE.PointLight(0xffdd88, 2, 200);
+sunGlow.position.set(60, 80, 40);
+scene.add(sunGlow);
 
 // ─── TERRAIN ──────────────────────────────────────────────────────────
 const TILE_SIZE = 100;
@@ -171,10 +184,10 @@ function buildTile(tileX, tileZ) {
   geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
   mesh.position.set(tileX * TILE_SIZE, 0, tileZ * TILE_SIZE);
+  mesh.receiveShadow = true;
   return mesh;
 }
 
-// Keep a 3x3 grid of tiles around the player
 const tiles = {};
 const tileObjects = {};
 
@@ -183,8 +196,6 @@ function tileKey(tx, tz) { return `${tx}_${tz}`; }
 function updateTiles(playerX, playerZ) {
   const cx = Math.round(playerX / TILE_SIZE);
   const cz = Math.round(playerZ / TILE_SIZE);
-
-  // Add new tiles
   for (let tx = cx - 1; tx <= cx + 1; tx++) {
     for (let tz = cz - 1; tz <= cz + 1; tz++) {
       const key = tileKey(tx, tz);
@@ -197,8 +208,6 @@ function updateTiles(playerX, playerZ) {
       }
     }
   }
-
-  // Remove far tiles
   for (const key in tiles) {
     const [ktx, ktz] = key.split('_').map(Number);
     if (Math.abs(ktx - cx) > 2 || Math.abs(ktz - cz) > 2) {
@@ -209,7 +218,7 @@ function updateTiles(playerX, playerZ) {
   }
 }
 
-// ─── DECOR PER TILE ────────────────────────────────────────────────────
+// ─── DECOR ─────────────────────────────────────────────────────────────
 const tileDecor = {};
 
 function spawnTileDecor(tileX, tileZ) {
@@ -219,7 +228,7 @@ function spawnTileDecor(tileX, tileZ) {
   const ox = tileX * TILE_SIZE;
   const oz = tileZ * TILE_SIZE;
 
-  // Trees
+  // Trees with emissive glow on leaves
   for (let i = 0; i < 20; i++) {
     const x = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
     const z = oz + Math.random() * TILE_SIZE - TILE_SIZE / 2;
@@ -231,8 +240,11 @@ function spawnTileDecor(tileX, tileZ) {
       new THREE.MeshLambertMaterial({ color: 0x3a1f00 })
     );
     trunk.position.set(x, baseH + trunkH / 2, z);
+    trunk.castShadow = true;
     group.add(trunk);
-    const layerColors = [0x2d7a1a, 0x33881f, 0x226614];
+
+    const leafColors = [0x2d7a1a, 0x33881f, 0x226614];
+    const emissiveColors = [0x0a2a06, 0x0d3008, 0x082008];
     [
       { r: 1.4 * scale, h: 2.2 * scale, y: baseH + trunkH + 0.6 * scale },
       { r: 1.0 * scale, h: 1.8 * scale, y: baseH + trunkH + 1.7 * scale },
@@ -240,18 +252,23 @@ function spawnTileDecor(tileX, tileZ) {
     ].forEach((l, i) => {
       const cone = new THREE.Mesh(
         new THREE.ConeGeometry(l.r, l.h, 7),
-        new THREE.MeshLambertMaterial({ color: layerColors[i] })
+        new THREE.MeshLambertMaterial({
+          color: leafColors[i],
+          emissive: new THREE.Color(emissiveColors[i]),
+          emissiveIntensity: 0.3
+        })
       );
       cone.position.set(x, l.y, z);
+      cone.castShadow = true;
       group.add(cone);
     });
   }
 
   // Rocks
   for (let i = 0; i < 6; i++) {
-    const cx = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
-    const cz = oz + Math.random() * TILE_SIZE - TILE_SIZE / 2;
-    const baseH = getTerrainHeight(cx, cz);
+    const cx2 = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
+    const cz2 = oz + Math.random() * TILE_SIZE - TILE_SIZE / 2;
+    const baseH = getTerrainHeight(cx2, cz2);
     const count = 2 + Math.floor(Math.random() * 3);
     for (let j = 0; j < count; j++) {
       const size = 0.4 + Math.random() * 0.9;
@@ -260,16 +277,44 @@ function spawnTileDecor(tileX, tileZ) {
         new THREE.MeshLambertMaterial({ color: [0x999999, 0x888888, 0xaaaaaa][j % 3] })
       );
       rock.position.set(
-        cx + (Math.random() - 0.5) * 3,
+        cx2 + (Math.random() - 0.5) * 3,
         baseH + size * 0.5,
-        cz + (Math.random() - 0.5) * 3
+        cz2 + (Math.random() - 0.5) * 3
       );
       rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+      rock.castShadow = true;
       group.add(rock);
     }
   }
 
-  // Grass
+  // Flowers with emissive glow
+  const flowerColors = [0xff4488, 0xff8800, 0xffff00, 0xff00ff, 0x00ffff];
+  for (let i = 0; i < 40; i++) {
+    const x = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
+    const z = oz + Math.random() * TILE_SIZE - TILE_SIZE / 2;
+    const baseH = getTerrainHeight(x, z);
+    const color = flowerColors[Math.floor(Math.random() * flowerColors.length)];
+    const stemH = 0.3 + Math.random() * 0.3;
+
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.02, 0.02, stemH, 4),
+      new THREE.MeshLambertMaterial({ color: 0x33aa33 })
+    );
+    stem.position.set(x, baseH + stemH / 2, z);
+
+    const flower = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1, 5, 5),
+      new THREE.MeshLambertMaterial({
+        color,
+        emissive: new THREE.Color(color),
+        emissiveIntensity: 0.6
+      })
+    );
+    flower.position.set(x, baseH + stemH + 0.1, z);
+    group.add(stem, flower);
+  }
+
+  // Grass blades
   for (let i = 0; i < 120; i++) {
     const x = ox + Math.random() * TILE_SIZE - TILE_SIZE / 2;
     const z = oz + Math.random() * TILE_SIZE - TILE_SIZE / 2;
@@ -288,7 +333,7 @@ function spawnTileDecor(tileX, tileZ) {
   tileDecor[key] = group;
 }
 
-// ─── AVATAR BUILDER ────────────────────────────────────────────────────
+// ─── AVATAR ────────────────────────────────────────────────────────────
 function makeNameTag(name) {
   const canvas = document.createElement('canvas');
   canvas.width = 256; canvas.height = 64;
@@ -309,19 +354,14 @@ function makeAvatar(color, name, type) {
   const greyMat = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
 
   if (type === 'cute') {
-    // Big round head
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 8), mat);
     head.position.y = 1.6;
-    // Small chubby body
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 7, 7), mat);
-    body.scale.y = 1.2;
-    body.position.y = 0.75;
-    // Eyes
+    body.scale.y = 1.2; body.position.y = 0.75;
     const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 5), darkMat);
     eyeL.position.set(-0.2, 1.68, 0.48);
     const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 5), darkMat);
     eyeR.position.set(0.2, 1.68, 0.48);
-    // Tiny legs
     const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.5, 5), mat);
     legL.position.set(-0.18, 0.25, 0);
     const legR = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.5, 5), mat);
@@ -329,23 +369,18 @@ function makeAvatar(color, name, type) {
     group.add(head, body, eyeL, eyeR, legL, legR);
 
   } else if (type === 'knight') {
-    // Body armor
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.5), mat);
     body.position.y = 0.9;
-    // Helmet
     const helmet = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.5, 6), mat);
     helmet.position.y = 1.75;
     const helmetTop = new THREE.Mesh(new THREE.SphereGeometry(0.38, 6, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat);
     helmetTop.position.y = 2.0;
-    // Visor
     const visor = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, 0.1), darkMat);
     visor.position.set(0, 1.78, 0.4);
-    // Legs
     const legL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.6, 0.28), mat);
     legL.position.set(-0.2, 0.3, 0);
     const legR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.6, 0.28), mat);
     legR.position.set(0.2, 0.3, 0);
-    // Sword
     const sword = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 0.06), greyMat);
     sword.position.set(0.6, 1.1, 0);
     const guard = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.06), greyMat);
@@ -353,54 +388,44 @@ function makeAvatar(color, name, type) {
     group.add(body, helmet, helmetTop, visor, legL, legR, sword, guard);
 
   } else if (type === 'ghost') {
-    const glowMat = new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.85 });
-    // Main body
+    const glowMat = new THREE.MeshLambertMaterial({
+      color, transparent: true, opacity: 0.85,
+      emissive: new THREE.Color(color), emissiveIntensity: 0.4
+    });
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8, 0, Math.PI * 2, 0, Math.PI * 0.65), glowMat);
     body.position.y = 1.3;
-    // Flowing bottom
     const bottom = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.8, 8), glowMat);
     bottom.position.y = 0.85;
-    // Eyes
     const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 5, 5),
-      new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1 }));
+      new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: new THREE.Color(0xffffff), emissiveIntensity: 2 }));
     eyeL.position.set(-0.18, 1.45, 0.44);
-    const eyeR = eyeL.clone();
-    eyeR.position.set(0.18, 1.45, 0.44);
-    // Glow halo
+    const eyeR = eyeL.clone(); eyeR.position.set(0.18, 1.45, 0.44);
     const halo = new THREE.Mesh(
       new THREE.TorusGeometry(0.55, 0.06, 6, 12),
-      new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.8 })
+      new THREE.MeshLambertMaterial({ color, emissive: new THREE.Color(color), emissiveIntensity: 1.5 })
     );
-    halo.position.y = 2.0;
-    halo.rotation.x = Math.PI / 2;
+    halo.position.y = 2.0; halo.rotation.x = Math.PI / 2;
     group.add(body, bottom, eyeL, eyeR, halo);
 
   } else if (type === 'human') {
-    // Head
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), mat);
     head.position.y = 1.75;
-    // Body
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.35), mat);
     body.position.y = 1.05;
-    // Arms
     const armL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 0.2), mat);
     armL.position.set(-0.42, 1.05, 0);
     const armR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 0.2), mat);
     armR.position.set(0.42, 1.05, 0);
-    // Legs
     const legL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.7, 0.24), mat);
     legL.position.set(-0.18, 0.35, 0);
     const legR = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.7, 0.24), mat);
     legR.position.set(0.18, 0.35, 0);
-    // Eyes
     const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.05), darkMat);
     eyeL.position.set(-0.12, 1.8, 0.26);
-    const eyeR = eyeL.clone();
-    eyeR.position.set(0.12, 1.8, 0.26);
+    const eyeR = eyeL.clone(); eyeR.position.set(0.12, 1.8, 0.26);
     group.add(head, body, armL, armR, legL, legR, eyeL, eyeR);
   }
 
-  // Name tag
   const tagMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(2, 0.5),
     new THREE.MeshBasicMaterial({ map: makeNameTag(name), transparent: true, depthWrite: false })
@@ -408,7 +433,6 @@ function makeAvatar(color, name, type) {
   tagMesh.position.y = 2.9;
   tagMesh.name = 'nameTag';
 
-  // Speech bubble
   const bubbleCanvas = document.createElement('canvas');
   bubbleCanvas.width = 512; bubbleCanvas.height = 128;
   const bubbleTexture = new THREE.CanvasTexture(bubbleCanvas);
@@ -422,7 +446,6 @@ function makeAvatar(color, name, type) {
   bubble.userData.canvas = bubbleCanvas;
   bubble.userData.texture = bubbleTexture;
   bubble.userData.timeout = null;
-
   group.add(tagMesh, bubble);
   return group;
 }
@@ -489,21 +512,19 @@ function checkProximity() {
   chatBox.style.display = near ? 'flex' : 'none';
 }
 
-// ─── SOCKET EVENTS ─────────────────────────────────────────────────────
+// ─── SOCKET ────────────────────────────────────────────────────────────
 socket.on('init', (players) => {
   for (const id in players) {
     const p = players[id];
     if (id === socket.id) {
       myColor  = p.color;
       myPlayer = makeAvatar(myColor, myName, selectedAvatar);
-      const h  = getTerrainHeight(p.x, p.z);
-      myPlayer.position.set(p.x, h, p.z);
+      myPlayer.position.set(p.x, getTerrainHeight(p.x, p.z), p.z);
       scene.add(myPlayer);
       updateTiles(p.x, p.z);
     } else {
       const avatar = makeAvatar(p.color, p.name, p.avatarType || 'human');
-      const h = getTerrainHeight(p.x, p.z);
-      avatar.position.set(p.x, h, p.z);
+      avatar.position.set(p.x, getTerrainHeight(p.x, p.z), p.z);
       scene.add(avatar);
       otherPlayers[id] = avatar;
     }
@@ -514,8 +535,7 @@ socket.on('init', (players) => {
 
 socket.on('playerJoined', (p) => {
   const avatar = makeAvatar(p.color, p.name, p.avatarType || 'human');
-  const h = getTerrainHeight(p.x, p.z);
-  avatar.position.set(p.x, h, p.z);
+  avatar.position.set(p.x, getTerrainHeight(p.x, p.z), p.z);
   scene.add(avatar);
   otherPlayers[p.id] = avatar;
   showMessage(`${p.name} joined the world!`);
@@ -530,8 +550,7 @@ socket.on('playerNamed', (data) => {
 
 socket.on('playerMoved', (data) => {
   if (otherPlayers[data.id]) {
-    const h = getTerrainHeight(data.x, data.z);
-    otherPlayers[data.id].position.set(data.x, h, data.z);
+    otherPlayers[data.id].position.set(data.x, getTerrainHeight(data.x, data.z), data.z);
   }
   checkProximity();
 });
@@ -553,9 +572,10 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// ─── GAME LOOP ──────────────────────────────────────────────────────────
+// ─── LOOP ──────────────────────────────────────────────────────────────
 const speed = 0.12;
 
 function animate() {
@@ -587,7 +607,7 @@ function animate() {
     if (obj.name === 'nameTag' || obj.name === 'speechBubble') obj.lookAt(camera.position);
   });
 
-  renderer.render(scene, camera);
+  composer.render();
 }
 
 animate();

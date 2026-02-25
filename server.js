@@ -7,6 +7,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static('public'));
+app.use('/node_modules', express.static('node_modules'));
 
 const players = {};
 
