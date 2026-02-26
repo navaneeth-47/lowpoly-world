@@ -1,36 +1,61 @@
-// ─── GOOGLE AUTH ──────────────────────────────────────────────────────
+// ─── GOOGLE AUTH + SESSION ────────────────────────────────────────────
 let googleUser = null;
+
+async function verifyAndSetUser(credential) {
+  const res = await fetch('/auth/google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: credential })
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error('Invalid token');
+  googleUser = data.user;
+  localStorage.setItem('lpw_credential', credential);
+  showAvatarStep();
+}
 
 async function handleGoogleLogin(response) {
   try {
-    const res = await fetch('/auth/google', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: response.credential })
-    });
-    const data = await res.json();
-    if (data.success) {
-      googleUser = data.user;
-
-      // Show user info
-      document.getElementById('google-pic').src = googleUser.picture;
-      document.getElementById('google-name').textContent = googleUser.name;
-      document.getElementById('google-email').textContent = googleUser.email;
-      document.getElementById('logged-in-info').style.display = 'flex';
-
-      // Switch to avatar step
-      document.getElementById('login-step').style.display = 'none';
-      document.getElementById('avatar-step').style.display = 'block';
-      document.getElementById('join-btn').style.display = 'inline-block';
-
-      // Build avatar picker with user's color
-      buildPicker(previewColor);
-    }
+    await verifyAndSetUser(response.credential);
   } catch (err) {
     console.error('Login failed:', err);
     alert('Login failed. Please try again.');
   }
 }
+
+function showAvatarStep() {
+  document.getElementById('google-pic').src = googleUser.picture;
+  document.getElementById('google-name').textContent = googleUser.name;
+  document.getElementById('google-email').textContent = googleUser.email;
+  document.getElementById('logged-in-info').style.display = 'flex';
+  document.getElementById('login-step').style.display = 'none';
+  document.getElementById('restoring-session').style.display = 'none';
+  document.getElementById('avatar-step').style.display = 'block';
+  document.getElementById('join-btn').style.display = 'inline-block';
+  buildPicker(previewColor);
+}
+
+// Restore session on page load
+window.addEventListener('load', async () => {
+  const saved = localStorage.getItem('lpw_credential');
+  if (saved) {
+    document.getElementById('restoring-session').style.display = 'block';
+    document.getElementById('login-step').style.display = 'none';
+    try {
+      await verifyAndSetUser(saved);
+    } catch {
+      localStorage.removeItem('lpw_credential');
+      document.getElementById('restoring-session').style.display = 'none';
+      document.getElementById('login-step').style.display = 'block';
+    }
+  }
+});
+
+// Logout
+document.getElementById('logout-btn').addEventListener('click', () => {
+  localStorage.removeItem('lpw_credential');
+  window.location.reload();
+});
 
 // ─── AVATAR DEFINITIONS ───────────────────────────────────────────────
 const AVATAR_TYPES = [
@@ -82,8 +107,7 @@ function drawAvatarPreview(type, color) {
   } else if (type === 'robot') {
     ctx.fillStyle = dark;
     ctx.fillRect(22, 72, 14, 22); ctx.fillRect(44, 72, 14, 22);
-    ctx.fillStyle = hex;
-    ctx.fillRect(16, 45, 48, 30);
+    ctx.fillStyle = hex; ctx.fillRect(16, 45, 48, 30);
     ctx.strokeStyle = dark; ctx.lineWidth = 1.5;
     ctx.strokeRect(22, 50, 14, 10); ctx.strokeRect(44, 50, 14, 10);
     ctx.fillStyle = '#00ffff';
@@ -215,13 +239,10 @@ const joinBtn     = document.getElementById('join-btn');
 joinBtn.addEventListener('click', () => {
   if (!googleUser) return;
   entryScreen.style.display = 'none';
-
-  // Show user badge in game
-  const badge = document.getElementById('user-badge');
   document.getElementById('badge-pic').src = googleUser.picture;
   document.getElementById('badge-name').textContent = googleUser.name;
-  badge.style.display = 'flex';
-
+  document.getElementById('user-badge').style.display = 'flex';
+  document.getElementById('logout-btn').style.display = 'block';
   const socket = io();
   initGame(socket);
 });
@@ -256,7 +277,6 @@ scene.add(sun);
 scene.add(new THREE.HemisphereLight(0x87ceeb, 0x4a7a20, 0.8));
 scene.add(new THREE.AmbientLight(0xffffff, 0.3));
 
-// ─── TERRAIN ──────────────────────────────────────────────────────────
 const TILE_SIZE = 100;
 const TILE_SEGS = 40;
 
@@ -373,7 +393,7 @@ function spawnTileDecor(tileX, tileZ) {
         new THREE.DodecahedronGeometry(size, 0),
         new THREE.MeshLambertMaterial({ color: [0x999999, 0x888888, 0xaaaaaa][j % 3] })
       );
-      rock.position.set(cx + (Math.random()-0.5)*3, baseH + size*0.5, cz + (Math.random()-0.5)*3);
+      rock.position.set(cx+(Math.random()-0.5)*3, baseH+size*0.5, cz+(Math.random()-0.5)*3);
       rock.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
       rock.castShadow = true;
       group.add(rock);
@@ -418,7 +438,6 @@ function spawnTileDecor(tileX, tileZ) {
   tileDecor[key] = group;
 }
 
-// ─── NAME TAG ──────────────────────────────────────────────────────────
 function makeNameTag(name) {
   const canvas = document.createElement('canvas');
   canvas.width = 256; canvas.height = 64;
@@ -432,7 +451,6 @@ function makeNameTag(name) {
   return new THREE.CanvasTexture(canvas);
 }
 
-// ─── 3D AVATAR BUILDER ─────────────────────────────────────────────────
 function makeAvatar(color, name, type) {
   const group = new THREE.Group();
   const mat  = (col) => new THREE.MeshLambertMaterial({ color: col });
@@ -638,7 +656,6 @@ function showSpeechBubble(avatar, text) {
   bubble.userData.timeout = setTimeout(() => { bubble.visible = false; }, 5000);
 }
 
-// ─── STATE ─────────────────────────────────────────────────────────────
 let myPlayer = null;
 let myColor  = null;
 const otherPlayers = {};
@@ -677,7 +694,6 @@ function checkProximity() {
   chatBox.style.display = near ? 'flex' : 'none';
 }
 
-// ─── SOCKET ────────────────────────────────────────────────────────────
 socket.on('init', (players) => {
   for (const id in players) {
     const p = players[id];
@@ -743,7 +759,6 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// ─── LOOP ──────────────────────────────────────────────────────────────
 const speed = 0.12;
 let time = 0;
 
@@ -783,4 +798,4 @@ function animate() {
 
 animate();
 
-} 
+} // end initGame

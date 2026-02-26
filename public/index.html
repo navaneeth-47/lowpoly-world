@@ -54,7 +54,7 @@
       text-shadow: 1px 1px 2px black;
     }
 
-    /* User profile badge */
+    /* User badge */
     #user-badge {
       position: fixed;
       bottom: 70px;
@@ -68,6 +68,7 @@
       color: white;
       font-family: sans-serif;
       font-size: 13px;
+      backdrop-filter: blur(6px);
     }
     #user-badge img {
       width: 28px;
@@ -76,6 +77,26 @@
       border: 2px solid #4CAF50;
     }
 
+    /* Logout button */
+    #logout-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: none;
+      padding: 8px 18px;
+      border-radius: 20px;
+      border: none;
+      background: rgba(200,50,50,0.8);
+      color: white;
+      font-size: 13px;
+      font-family: sans-serif;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+      transition: background 0.2s;
+    }
+    #logout-btn:hover { background: rgba(220,50,50,1); }
+
+    /* Entry screen */
     #entry-screen {
       position: fixed;
       top: 0; left: 0;
@@ -107,7 +128,6 @@
     }
     #entry-box p { font-size: 13px; color: #aaa; margin-bottom: 24px; }
 
-    /* Login step */
     #login-step { display: block; }
     #avatar-step { display: none; }
 
@@ -117,7 +137,6 @@
       margin-bottom: 20px;
     }
 
-    /* Logged in user info */
     #logged-in-info {
       display: none;
       align-items: center;
@@ -138,6 +157,14 @@
     #logged-in-info .info-text { text-align: left; }
     #logged-in-info .info-name { font-size: 15px; font-weight: bold; color: white; }
     #logged-in-info .info-email { font-size: 11px; color: #aaa; }
+
+    /* Restore session loading */
+    #restoring-session {
+      display: none;
+      color: #aaa;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
 
     #avatar-picker {
       display: flex;
@@ -201,18 +228,20 @@
     <button id="chat-send">Send</button>
   </div>
 
-  <!-- User badge shown in game -->
   <div id="user-badge">
     <img id="badge-pic" src="" alt=""/>
     <span id="badge-name"></span>
   </div>
+
+  <button id="logout-btn">Sign Out</button>
 
   <div id="entry-screen">
     <div id="entry-box">
       <h2>Low Poly World</h2>
       <p>Sign in with Google to enter the world</p>
 
-      <!-- Step 1: Login -->
+      <div id="restoring-session">⏳ Restoring session...</div>
+
       <div id="login-step">
         <div id="google-btn-container">
           <div id="g_id_onload"
@@ -231,7 +260,6 @@
         </div>
       </div>
 
-      <!-- Step 2: Avatar + Join (shown after login) -->
       <div id="avatar-step">
         <div id="logged-in-info">
           <img id="google-pic" src="" alt=""/>
