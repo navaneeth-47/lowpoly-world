@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Low Poly World</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #87CEEB; }
@@ -52,6 +53,29 @@
       text-align: right;
       text-shadow: 1px 1px 2px black;
     }
+
+    /* User profile badge */
+    #user-badge {
+      position: fixed;
+      bottom: 70px;
+      right: 20px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0,0,0,0.5);
+      padding: 8px 14px;
+      border-radius: 30px;
+      color: white;
+      font-family: sans-serif;
+      font-size: 13px;
+    }
+    #user-badge img {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid #4CAF50;
+    }
+
     #entry-screen {
       position: fixed;
       top: 0; left: 0;
@@ -82,19 +106,39 @@
       -webkit-text-fill-color: transparent;
     }
     #entry-box p { font-size: 13px; color: #aaa; margin-bottom: 24px; }
-    #name-input {
-      padding: 12px 20px;
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(255,255,255,0.1);
-      color: white;
-      font-size: 16px;
-      width: 240px;
-      outline: none;
-      text-align: center;
-      margin-bottom: 28px;
+
+    /* Login step */
+    #login-step { display: block; }
+    #avatar-step { display: none; }
+
+    #google-btn-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 20px;
     }
-    #name-input::placeholder { color: rgba(255,255,255,0.4); }
+
+    /* Logged in user info */
+    #logged-in-info {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding: 14px 20px;
+      background: rgba(76,175,80,0.15);
+      border: 1px solid rgba(76,175,80,0.3);
+      border-radius: 14px;
+    }
+    #logged-in-info img {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 2px solid #4CAF50;
+    }
+    #logged-in-info .info-text { text-align: left; }
+    #logged-in-info .info-name { font-size: 15px; font-weight: bold; color: white; }
+    #logged-in-info .info-email { font-size: 11px; color: #aaa; }
+
     #avatar-picker {
       display: flex;
       justify-content: center;
@@ -128,6 +172,7 @@
     .avatar-option canvas { border-radius: 10px; }
     .avatar-label { font-size: 12px; color: #ccc; font-weight: bold; }
     .avatar-desc { font-size: 10px; color: #888; margin-top: -4px; }
+
     #join-btn {
       padding: 14px 50px;
       border-radius: 25px;
@@ -140,6 +185,7 @@
       letter-spacing: 1px;
       box-shadow: 0 4px 20px rgba(68,204,136,0.3);
       transition: all 0.2s;
+      display: none;
     }
     #join-btn:hover {
       transform: translateY(-2px);
@@ -155,13 +201,49 @@
     <button id="chat-send">Send</button>
   </div>
 
+  <!-- User badge shown in game -->
+  <div id="user-badge">
+    <img id="badge-pic" src="" alt=""/>
+    <span id="badge-name"></span>
+  </div>
+
   <div id="entry-screen">
     <div id="entry-box">
-      <h2>Enter Low Poly World</h2>
-      <p>Choose your character and enter your name</p>
-      <input id="name-input" type="text" maxlength="16" placeholder="Your name..."/>
-      <div id="avatar-picker"></div>
-      <button id="join-btn">⚔ Enter World</button>
+      <h2>Low Poly World</h2>
+      <p>Sign in with Google to enter the world</p>
+
+      <!-- Step 1: Login -->
+      <div id="login-step">
+        <div id="google-btn-container">
+          <div id="g_id_onload"
+            data-client_id="351398026729-vqd0mr61t7d3bsgu6dna25u0tgm1hj06.apps.googleusercontent.com"
+            data-callback="handleGoogleLogin"
+            data-auto_prompt="false">
+          </div>
+          <div class="g_id_signin"
+            data-type="standard"
+            data-size="large"
+            data-theme="filled_black"
+            data-text="sign_in_with"
+            data-shape="pill"
+            data-logo_alignment="left">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Avatar + Join (shown after login) -->
+      <div id="avatar-step">
+        <div id="logged-in-info">
+          <img id="google-pic" src="" alt=""/>
+          <div class="info-text">
+            <div class="info-name" id="google-name"></div>
+            <div class="info-email" id="google-email"></div>
+          </div>
+        </div>
+        <div id="avatar-picker"></div>
+        <button id="join-btn">⚔ Enter World</button>
+      </div>
+
     </div>
   </div>
 
